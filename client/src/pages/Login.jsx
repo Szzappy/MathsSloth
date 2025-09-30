@@ -21,8 +21,10 @@ function Login() {
 
       const data = await response.json();
 
-      localStorage.setItem('token', data.token)
-      navigate("/dashboard")
+      if (data.token) {
+        localStorage.setItem('token', data.token)
+        navigate("/dashboard")
+      }
 
     } catch (error) {
       console.log("Error logging in,", error.message)

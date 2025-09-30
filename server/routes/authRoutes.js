@@ -53,6 +53,7 @@ router.post("/register", validCredentials, async (req, res) => {
 router.post("/login", validCredentials, async (req, res) => {
   try {
     const {email, password} = req.body;
+    
     // check if user exists
     const user = await pool.query(`
       SELECT *
@@ -60,6 +61,7 @@ router.post("/login", validCredentials, async (req, res) => {
       WHERE email = $1`, [
         email
     ]);
+    
     if (user.rows.length === 0) 
       return res.status(401).json(`Account with email ${email} doesn't exist`);
 
@@ -75,15 +77,6 @@ router.post("/login", validCredentials, async (req, res) => {
   } catch (error) {
     console.error(error.message);
     res.status(500).json("Internal Server Error")
-  }
-})
-
-router.get("/verify", authMiddleware, async (req, res) => {
-  try {
-    res.json(true);
-  } catch (error) {
-    console.error(error.message);
-    res.status(500).json("Internal Server Error");
   }
 })
 
