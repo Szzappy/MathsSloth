@@ -4,6 +4,7 @@ import GptInput from '../components/GptInput'
 import WolframInput from '../components/WolframInput'
 
 function Dashboard() {
+  const API_URL = import.meta.env.VITE_API_URL;
   const navigate = useNavigate();
   const [name, setName] = useState("")
 
@@ -18,7 +19,7 @@ function Dashboard() {
       try {
         const token = localStorage.getItem('token');
 
-        const response = await fetch("http://localhost:4000/dashboard/", {
+        const response = await fetch(`${API_URL}/dashboard/`, {
           method: "GET",
           headers: {
             'token': token,
