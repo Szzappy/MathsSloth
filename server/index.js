@@ -8,7 +8,10 @@ import dashboardRoutes from "./routes/dashboardRoutes.js"
 
 // simple routes
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: '*', // Allow all origins (NOT recommended for production)
+  credentials: true
+}));
 app.use(express.json());
 
 // ROUTES
