@@ -12,6 +12,23 @@ CREATE TABLE users (
   password VARCHAR(255) NOT NULL
 );
 
+-- a subtopic could reference a topicid in this table 
+-- if trigonometry is the parent topic, a subtopic could be trig differentiation
+-- could also be placed under calculus though
+-- maybe add a composite primary key
+CREATE TABLE topics (
+  topicid SERIAL PRIMARY KEY,
+  topic_name VARCHAR(255) NOT NULL UNIQUE
+);
+
+CREATE TABLE questions (
+  questionid SERIAL PRIMARY KEY,
+  question_topic INTEGER REFERENCES topics(topicid) ON DELETE CASCADE,
+  question_text TEXT,
+  format VARCHAR(255), -- does it require long answer or multiple choice
+  difficulty INTEGER CHECK (difficulty BETWEEN 1 AND 100)
+);
+
 -- could have a topic category called mixed where you can have multiple different topics
 -- a quiz is made for a specific user
 CREATE TABLE quiz (
@@ -31,13 +48,6 @@ CREATE TABLE quiz_questions (
   PRIMARY KEY(quizid, questionid) 
 );
 
-CREATE TABLE questions (
-  questionid SERIAL PRIMARY KEY,
-  question_topic INTEGER REFERENCES topics(topicid) ON DELETE CASCADE,
-  question_text TEXT,
-  format VARCHAR(255), -- does it require long answer or multiple choice
-  difficulty VARCHAR(255) CHECK (difficulty BETWEEN 1 AND 100)
-);
 
 CREATE TABLE question_attempts (
   attemptid SERIAL PRIMARY KEY,
@@ -71,15 +81,6 @@ CREATE TABLE user_topics (
   study_time INTEGER DEFAULT 0, -- study time in seconds
   last_studied_at TIMESTAMP,
   PRIMARY KEY(userid, topicid)
-);
-
--- a subtopic could reference a topicid in this table 
--- if trigonometry is the parent topic, a subtopic could be trig differentiation
--- could also be placed under calculus though
--- maybe add a composite primary key
-CREATE TABLE topics (
-  topicid SERIAL PRIMARY KEY,
-  topic_name VARCHAR(255) NOT NULL UNIQUE
 );
 
 CREATE TABLE formulae (
