@@ -6,28 +6,34 @@ function Register() {
   const API_URL = import.meta.env.VITE_API_URL;
   
   const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
   const [email, setEmail] = useState(""); // hide the passwords and add a retype password functionality to it
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setUsername("");
     setEmail("");
     setPassword("");
+    setConfirmPassword("");
 
     try {
       const response = await fetch(`${API_URL}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({username, email, password})
+        body: JSON.stringify({username, email, password, confirmPassword})
       })
+
 
       // backend returns a token
       const data = await response.json();
       // get the token from data object and store in local storage
-      localStorage.setItem('token', data.token);
 
-      navigate("/dashboard");
+      
+      if (data.token) {
+        localStorage.setItem('token', data.token);
+        navigate("/dashboard");
+      }
     } catch (error) {
       console.error(error.message)
     }
@@ -55,6 +61,14 @@ function Register() {
       value={password}
       onChange={(e) => setPassword(e.target.value)}
       placeholder='password...'
+      required
+    />
+    
+    <input
+      type='password'
+      value={confirmPassword}
+      onChange={(e) => setConfirmPassword(e.target.value)}
+      placeholder='retype password...'
       required
     />
     

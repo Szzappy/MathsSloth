@@ -11,7 +11,7 @@ const router = express.Router()
 router.post("/register", validCredentials, async (req, res) => {
   try {
     // Destructure req.body
-    const {username, email, password} = req.body;
+    const {username, email, password, confirmPassword} = req.body;
 
     // check if user alread exists
     const user = await pool.query(`
@@ -21,6 +21,9 @@ router.post("/register", validCredentials, async (req, res) => {
         email, 
         username
     ]);
+
+    if (password != confirmPassword)
+      return res.status(401).json("Passwords don't match")
 
     // if query returns more than 1 row, email already exists
     if (user.rows.length > 0) 
@@ -40,7 +43,7 @@ router.post("/register", validCredentials, async (req, res) => {
     ]);
 
     // generate jwt token
-    const token = jwtGenerator(newUser.rows[0].userid);
+    const token = jwtGenerator(newUser.rows[0].userid, false);
     res.json({token: token});
   } catch (error) {
     console.error(error.message);
@@ -52,7 +55,7 @@ router.post("/register", validCredentials, async (req, res) => {
 // error with logging in, jwt malformed
 router.post("/login", validCredentials, async (req, res) => {
   try {
-    const {email, password} = req.body;
+    const {email, password, rememberMe} = req.body;
     
     // check if user exists
     const user = await pool.query(`
@@ -71,7 +74,7 @@ router.post("/login", validCredentials, async (req, res) => {
     if (!validPassword)
       return res.status(401).json("Incorrect password")
     
-    const token = jwtGenerator(user.rows[0].userid)
+    const token = jwtGenerator(user.rows[0].userid, rememberMe)
     
     res.json({token: token})
   } catch (error) {

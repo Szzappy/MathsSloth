@@ -9,7 +9,6 @@ function Dashboard() {
   const [name, setName] = useState("")
 
   const handleLogout = () => {
-    console.log("logout");
     localStorage.removeItem('token');
     navigate('/login')
   }
@@ -17,6 +16,7 @@ function Dashboard() {
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
+        console.log("dashboard")
         const token = localStorage.getItem('token');
 
         const response = await fetch(`${API_URL}/dashboard/`, {
