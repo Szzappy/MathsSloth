@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Dashboard from "./pages/Dashboard.jsx";
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx"
+import VerifyEmail from './pages/VerifyEmail';
 
 // For things like the dashboard where only a specific user can access it
 // the replace in the Navigate to tags is so that the browser history is replaced
@@ -50,6 +51,8 @@ function App() {
             </PublicRoute>
           } 
         />
+
+      <Route path="/verify-email" element={<VerifyEmail />} />
 
       {/* PROTECTED ROUTES*/}
       <Route 
