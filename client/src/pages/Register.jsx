@@ -39,13 +39,13 @@ function Register() {
         setRegistrationSuccess(true);
         
         setUsername("");
-        setEmail("");
+        // setEmail("");
         setPassword("");
         setConfirmPassword("");
       } else if (response.status === 409 && data.needsVerification) {
         setError(data.error);
-        setNeedsVerification(true);
         setUserEmail(data.email || email);
+        setNeedsVerification(true);
       } else {
         setError(data.error || data || "Registration failed. Please try again.");
       }
@@ -76,6 +76,9 @@ function Register() {
         setMessage(data.message || "Verification email sent!");
       else
         setError(data.error || data || "Failed to resend verification email.");
+
+      if (data.status === 429) 
+        setError(data.error)
       
     } catch (error) {
       console.error(error.message);
@@ -102,88 +105,97 @@ function Register() {
           <button onClick={handleResendVerification} disabled={loading}>
             {loading ? 'Sending...' : 'Resend Verification Email'}
           </button>
+          <p>{error}</p>
         </div>
       ) : (
         // Show registration form
-        <form onSubmit={handleSubmit}>
-          {error && (
-            <div>
-              {error}
-            </div>
-          )}
-          
-          {message && (
-            <div>
-              {message}
-            </div>
-          )}
+        <div>
+          {needsVerification ? (
+              <div className="warning-message">
+                <p>
+                  An unverified account with this email already exists. 
+                  Please check your email or request a new verification link.
+                </p>
+                <button 
+                  type="button"
+                  onClick={handleResendVerification}
+                  disabled={loading}
+                >
+                  {loading ? 'Sending...' : 'Resend Verification Email'}
+                </button>
+              </div>
+            ) : (
+          <div>
+            <form onSubmit={handleSubmit}>
+              {error && (
+                <div>
+                  {error}
+                </div>
+              )}
+              
+              {message && (
+                <div>
+                  {message}
+                </div>
+              )}
 
-          {needsVerification && (
-          <div className="warning-message">
-            <p>
-              An unverified account with this email already exists. 
-              Please check your email or request a new verification link.
-            </p>
-            <button 
-              type="button"
-              onClick={handleResendVerification}
-              disabled={loading}
-            >
-              {loading ? 'Sending...' : 'Resend Verification Email'}
-            </button>
+              
+              
+              <input
+                type='text'
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder='username...'
+                required
+                disabled={loading}
+              />
+              
+              <input
+                type='email'
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder='email...'
+                required
+                disabled={loading}
+              />
+              
+              <input
+                type='password'
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder='password...'
+                required
+                disabled={loading}
+              />
+              
+              <input
+                type='password'
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder='retype password...'
+                required
+                disabled={loading}
+              />
+              
+              <button type="submit" disabled={loading}>
+                {loading ? 'Registering...' : 'Register'}
+              </button>
+            </form>
+
+            
+          
+            <div style={{ marginTop: '1rem' }}>
+              <p>
+                Already have an account?{' '}
+                <Link to="/login">
+                  Login
+                </Link>
+              </p>
+            </div> 
           </div>
         )}
-          
-          <input
-            type='text'
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder='username...'
-            required
-            disabled={loading}
-          />
-          
-          <input
-            type='email'
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder='email...'
-            required
-            disabled={loading}
-          />
-          
-          <input
-            type='password'
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder='password...'
-            required
-            disabled={loading}
-          />
-          
-          <input
-            type='password'
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder='retype password...'
-            required
-            disabled={loading}
-          />
-          
-          <button type="submit" disabled={loading}>
-            {loading ? 'Registering...' : 'Register'}
-          </button>
-        </form>
+        </div>
       )}
-      
-      <div style={{ marginTop: '1rem' }}>
-        <p>
-          Already have an account?{' '}
-          <Link to="/login">
-            Login
-          </Link>
-        </p>
-      </div>
   </>)
 }
 

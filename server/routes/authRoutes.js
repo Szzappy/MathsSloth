@@ -73,7 +73,7 @@ router.post("/register", validCredentials, async (req, res) => {
             DELETE FROM users
             WHERE userid = $1`, [
               existingUser.userid
-            ])
+          ]);
         } else {
           return res.status(409).json({
             error: "Unverified account with this email exists already. Please check your email",
@@ -114,7 +114,7 @@ router.post("/register", validCredentials, async (req, res) => {
 
     res.status(201).json({
       message: "Registration successful, Please check your email to verify your account.",
-      email: email
+      email
     })
   } catch (error) {
     console.error(error.message);

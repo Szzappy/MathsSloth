@@ -7,12 +7,15 @@ import wolframRoutes from "./routes/wolfram.js"
 import authRoutes from "./routes/authRoutes.js"
 import dashboardRoutes from "./routes/dashboardRoutes.js"
 
-// simple routes
 const app = express();
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
+  skip: (req) => {
+    // Skip rate limiting for verify email route
+    return req.path === '/verify-email'
+  },
   message: {
     error: "Too many requests, please try again later",
     rateLimitTimer: 15 * 60 * 1000
@@ -25,7 +28,7 @@ const apiLimiter = rateLimit({
 });
 
 app.use(cors({
-  origin: '*', // Allow all origins (NOT recommended for production)
+  origin: '*', // Allow all origins
   credentials: true
 }));
 app.use(express.json());
