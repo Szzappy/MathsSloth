@@ -1,8 +1,7 @@
 import React, {useState} from 'react';
-import { useNavigate, Link } from "react-router";
+import { Link } from "react-router";
 
 function Register() {
-  const navigate = useNavigate();
   const API_URL = import.meta.env.VITE_API_URL;
   
   const [username, setUsername] = useState("");
@@ -39,7 +38,6 @@ function Register() {
         setRegistrationSuccess(true);
         
         setUsername("");
-        // setEmail("");
         setPassword("");
         setConfirmPassword("");
       } else if (response.status === 409 && data.needsVerification) {
@@ -139,8 +137,6 @@ function Register() {
                 </div>
               )}
 
-              
-              
               <input
                 type='text'
                 value={username}
@@ -181,8 +177,6 @@ function Register() {
                 {loading ? 'Registering...' : 'Register'}
               </button>
             </form>
-
-            
           
             <div style={{ marginTop: '1rem' }}>
               <p>
