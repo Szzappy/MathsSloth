@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import rateLimit from "express-rate-limit"
 import 'dotenv/config';
 import openaiRoutes from "./routes/openai.js"
 import wolframRoutes from "./routes/wolfram.js"
@@ -8,6 +9,21 @@ import dashboardRoutes from "./routes/dashboardRoutes.js"
 
 // simple routes
 const app = express();
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: {
+    error: "Too many requests, please try again later",
+    rateLimitTimer: 15 * 60 * 1000
+  }
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+});
+
 app.use(cors({
   origin: '*', // Allow all origins (NOT recommended for production)
   credentials: true
@@ -15,9 +31,9 @@ app.use(cors({
 app.use(express.json());
 
 // ROUTES
-app.use("/api/openai", openaiRoutes);
-app.use("/api/wolfram", wolframRoutes);
-app.use("/auth", authRoutes);
+app.use("/api/openai", apiLimiter, openaiRoutes);
+app.use("/api/wolfram", apiLimiter, wolframRoutes);
+app.use("/auth", authLimiter, authRoutes);
 app.use("/dashboard", dashboardRoutes)
 
 

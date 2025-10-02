@@ -218,7 +218,6 @@ router.post("/resend-verification", async (req, res) => {
 });
 
 // LOGIN ROUTES
-// error with logging in, jwt malformed
 router.post("/login", validCredentials, async (req, res) => {
   try {
     const {email, password, rememberMe} = req.body;

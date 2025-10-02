@@ -13,6 +13,8 @@ function Login() {
   const [loading, setLoading] = useState(false);
   const [needsVerification, setNeedsVerification] = useState(false);
   const [userEmail, setUserEmail] = useState("");
+
+  const [rateLimit, setRateLimit] = useState(false);
   
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -42,6 +44,10 @@ function Login() {
       } else {
         // Other errors
         setError(data.error || data || "Login failed. Please try again.");
+
+        if (data.rateLimitTimer) {
+          console.log("rate limiting in action")
+        }
       }
 
     } catch (error) {
