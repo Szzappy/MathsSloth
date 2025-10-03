@@ -26,10 +26,13 @@ CREATE TABLE topics (
 
 CREATE TABLE questions (
   questionid SERIAL PRIMARY KEY,
-  question_topic INTEGER REFERENCES topics(topicid) ON DELETE CASCADE,
+  topic INTEGER REFERENCES topics(topicid) ON DELETE CASCADE,
   question_text TEXT,
+  image_url TEXT,
   format VARCHAR(255), -- does it require long answer or multiple choice
-  difficulty INTEGER CHECK (difficulty BETWEEN 1 AND 100)
+  answer TEXT,
+  difficulty INTEGER CHECK (difficulty BETWEEN 1 AND 100),
+  marks INTEGER
 );
 
 -- could have a topic category called mixed where you can have multiple different topics
@@ -59,7 +62,7 @@ CREATE TABLE question_attempts (
   quizid INTEGER REFERENCES quiz(quizid), -- maybe include for context??
   
   -- performance data
-  correct BOOLEAN NOT NULL,
+  attempt_mark INTEGER,
   confidence INTEGER CHECK (confidence BETWEEN 1 AND 8),
   time_taken INTEGER,
   attempted_at TIMESTAMP DEFAULT NOW(),

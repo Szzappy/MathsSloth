@@ -6,12 +6,16 @@ import WolframInput from '../components/WolframInput'
 function Dashboard() {
   const API_URL = import.meta.env.VITE_API_URL;
   const navigate = useNavigate();
-  const [name, setName] = useState("")
+  const [name, setName] = useState("");
+
+  const loadQuiz = () => {
+    navigate('/quiz');
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     navigate('/login')
-  }
+  };
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -54,6 +58,9 @@ function Dashboard() {
       </button>
       
       <div>
+        <button onClick={loadQuiz}>
+          Quiz
+        </button>
         <GptInput />
         <WolframInput />
       </div>

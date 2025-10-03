@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import Dashboard from "./pages/Dashboard.jsx";
+import Quiz from "./pages/Quiz.jsx"
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx"
 import VerifyEmail from './pages/VerifyEmail';
@@ -60,6 +61,15 @@ function App() {
           element={
             <ProtectedRoute>
               <Dashboard />
+            </ProtectedRoute>
+          } 
+        />
+      
+      <Route 
+          path="/quiz" 
+          element={
+            <ProtectedRoute>
+              <Quiz />
             </ProtectedRoute>
           } 
         />

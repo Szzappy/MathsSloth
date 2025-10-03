@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "questionsSeed": "node seeds/questionsSeed.js"
   },
   "keywords": [],
   "author": "",

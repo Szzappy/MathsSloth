@@ -6,6 +6,8 @@ import openaiRoutes from "./routes/openai.js"
 import wolframRoutes from "./routes/wolfram.js"
 import authRoutes from "./routes/authRoutes.js"
 import dashboardRoutes from "./routes/dashboardRoutes.js"
+import quizRoutes from "./routes/quizRoutes.js"
+import path from "path"
 
 const app = express();
 
@@ -37,7 +39,9 @@ app.use(express.json());
 app.use("/api/openai", apiLimiter, openaiRoutes);
 app.use("/api/wolfram", apiLimiter, wolframRoutes);
 app.use("/auth", authLimiter, authRoutes);
-app.use("/dashboard", dashboardRoutes)
+app.use("/dashboard", dashboardRoutes);
+app.use("/images", express.static(path.join(process.cwd(), "images")));
+app.use("/quiz", quizRoutes);
 
 
 const PORT = process.env.PORT || 4000;
