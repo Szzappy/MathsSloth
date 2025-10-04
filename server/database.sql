@@ -20,19 +20,26 @@ CREATE TABLE users (
 -- could also be placed under calculus though
 -- maybe add a composite primary key
 CREATE TABLE topics (
-  topicid SERIAL PRIMARY KEY,
-  topic_name VARCHAR(255) NOT NULL UNIQUE
+  topicid VARCHAR(255) PRIMARY KEY,
+  topic_name VARCHAR(255) NOT NULL UNIQUE,
+  parent_topic VARCHAR(255) REFERENCES topics(topicid)
 );
 
 CREATE TABLE questions (
   questionid SERIAL PRIMARY KEY,
-  topic INTEGER REFERENCES topics(topicid) ON DELETE CASCADE,
+  -- topic INTEGER REFERENCES topics(topicid) ON DELETE CASCADE,
   question_text TEXT,
   image_url TEXT,
   format VARCHAR(255), -- does it require long answer or multiple choice
   answer TEXT,
   difficulty INTEGER CHECK (difficulty BETWEEN 1 AND 100),
   marks INTEGER
+);
+
+CREATE TABLE question_topic (
+  questionid INTEGER REFERENCES questions(questionid) ON DELETE CASCADE,
+  topicid INTEGER REFERENCES topics(topicid) ON DELETE CASCADE,
+  PRIMARY KEY (questionid, topicid)
 );
 
 -- could have a topic category called mixed where you can have multiple different topics
