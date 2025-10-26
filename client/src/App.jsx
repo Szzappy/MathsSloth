@@ -5,6 +5,8 @@ import Quiz from "./pages/Quiz.jsx"
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx"
 import VerifyEmail from './pages/VerifyEmail';
+import OAuthSuccess from './pages/OAuthSuccess.jsx';
+import ForgotPassword from './pages/ForgotPassword.jsx';
 
 // For things like the dashboard where only a specific user can access it
 // the replace in the Navigate to tags is so that the browser history is replaced
@@ -55,6 +57,13 @@ function App() {
 
       <Route path="/verify-email" element={<VerifyEmail />} />
 
+      <Route path="/forgot-password" element={
+          <PublicRoute>
+            <ForgotPassword />
+          </PublicRoute>
+        }
+      />
+
       {/* PROTECTED ROUTES*/}
       <Route 
           path="/dashboard" 
@@ -73,6 +82,14 @@ function App() {
             </ProtectedRoute>
           } 
         />
+
+      <Route 
+          path="/oauth-success" 
+          element={
+              <OAuthSuccess />
+          } 
+        />
+
     </Routes>
   </BrowserRouter>
  )

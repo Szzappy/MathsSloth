@@ -8,6 +8,8 @@ function Register() {
   const [email, setEmail] = useState(""); // hide the passwords and add a retype password functionality to it
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [agreements, setAgreements] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -156,27 +158,56 @@ function Register() {
               />
               
               <input
-                type='password'
+                type= {showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder='password...'
                 required
                 disabled={loading}
               />
-              
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? 'Hide Password' : 'Show Password'}
+              </button>
+
               <input
-                type='password'
+                type= {showPassword ? 'text' : 'password'}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder='retype password...'
                 required
                 disabled={loading}
               />
-              
-              <button type="submit" disabled={loading}>
+
+              <input
+                type="checkbox"
+                checked={agreements}
+                onChange={(e) => setAgreements(e.target.checked)}
+                disabled={loading}
+              />
+              <label> I agree to the <Link to="/terms">Terms and Conditions</Link> and <Link to="/privacy">Privacy Policy</Link></label>
+
+              <button type="submit" disabled={loading || !agreements}>
                 {loading ? 'Registering...' : 'Register'}
               </button>
             </form>
+
+            <button
+              type="button"
+              onClick={() => {
+                setError("");
+                setMessage("");
+                setLoading(true);
+                // Redirect the browser to the backend Google OAuth endpoint
+                window.location.href = `${API_URL}/auth/google`;
+              }}
+              disabled={loading}
+              style={{ marginTop: '0.5rem' }}
+            >
+              {loading ? 'Redirecting...' : 'Register with Google'}
+            </button>
           
             <div style={{ marginTop: '1rem' }}>
               <p>

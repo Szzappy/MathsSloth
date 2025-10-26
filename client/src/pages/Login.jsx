@@ -146,6 +146,30 @@ function Login() {
           {loading ? 'Logging in...' : 'Login'}
         </button>
       </form>
+
+      <button
+        type="button"
+        onClick={() => {
+          setError("");
+          setMessage("");
+          setLoading(true);
+          // redirect browser to the backend Google OAuth endpoint
+          window.location.href = `${API_URL}/auth/google`;
+        }}
+        disabled={loading}
+        style={{ marginTop: '0.5rem' }}
+      >
+        {loading ? 'Redirecting...' : 'Login with Google'}
+      </button>
+
+      <button
+        type="button"
+        onClick={() => navigate('/forgot-password')}
+        disabled={loading}
+        style={{ display: 'block', marginTop: '1rem' }}
+      >
+        Forgot Password?
+      </button>
       
       <div>
         <p>
