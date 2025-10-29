@@ -34,7 +34,6 @@ function VerifyEmail() {
       
       if (response.ok) {
         setStatus('success');
-        console.log("cooooooolasfdasfdasdf");
         setMessage(data.message || 'Email verified successfully!');
         
         // Store the JWT token if provided
@@ -49,7 +48,6 @@ function VerifyEmail() {
           return;
         }
       } else {
-        console.log("uncool");
         setStatus('error');
         setMessage(data.error || data || 'Verification failed. The link may be invalid or expired.');
       }

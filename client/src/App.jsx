@@ -7,6 +7,7 @@ import Register from "./pages/Register.jsx"
 import VerifyEmail from './pages/VerifyEmail';
 import OAuthSuccess from './pages/OAuthSuccess.jsx';
 import ForgotPassword from './pages/ForgotPassword.jsx';
+import ResetPassword from './pages/ResetPassword.jsx';
 
 // For things like the dashboard where only a specific user can access it
 // the replace in the Navigate to tags is so that the browser history is replaced
@@ -88,6 +89,13 @@ function App() {
           element={
               <OAuthSuccess />
           } 
+        />
+
+      <Route
+          path="/reset-password"
+          element={
+              <ResetPassword />
+          }
         />
 
     </Routes>

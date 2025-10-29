@@ -22,15 +22,16 @@ app.use(session({
 }));
 
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
+  windowMs: 5 * 60 * 1000,
+  max: 15,
   skip: (req) => {
     // Skip rate limiting for verify email route
-    return req.path === '/verify-email'
+    return req.path === '/verify-email' 
+        || req.path === '/reset-password';
   },
   message: {
     error: "Too many requests, please try again later",
-    rateLimitTimer: 15 * 60 * 1000
+    rateLimitTimer: 5 * 60 * 1000
   }
 });
 

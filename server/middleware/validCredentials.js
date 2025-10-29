@@ -21,6 +21,11 @@ export default function(req, res, next) {
       return res.status(401).json("Missing Credentials");
     else if (!validEmail(email))
       return res.status(401).json("Invalid Email");
+  } else if (req.path === "/reset-password") {
+    if (![password].every(Boolean))
+      return res.status(401).json("Missing Credentials");
+    else if (!securePassword(password))
+      return res.status(401).json({error: "Password not secure enough, make sure to include 1 upper case, 1 number and 1 special character"});
   }
 
   // if we reach here, all is good

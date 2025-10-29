@@ -13,13 +13,26 @@ const router = express.Router();
 
 router.get("/google", passport.authenticate("google", { scope: ["profile", "email"] }));
 
-router.get("/google/callback",
-  passport.authenticate("google", { failureRedirect: "/login", session: false }),
-  (req, res) => {
-    const token = jwtGenerator(req.user.userid, false);
+router.get("/google/callback", (req, res, next) => {
+  passport.authenticate("google", { session: false }, (err, user, info) => {
+    // Handle errors
+    if (err) {
+      return res.redirect(`${process.env.FRONTEND_URL}/login?error=oauth_failed`);
+    }
+    
+    // Handle authentication failure with custom message
+    if (!user) {
+      const message = info?.message || "Authentication failed";
+      const encodedMessage = encodeURIComponent(message);
+      return res.redirect(`${process.env.FRONTEND_URL}/login?error=${encodedMessage}`);
+    }
+    
+    // Success - generate token and redirect
+    const token = jwtGenerator(user.userid, false);
     res.redirect(`${process.env.FRONTEND_URL}/oauth-success?token=${token}`);
-  }
-);
+    
+  })(req, res, next);
+});
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
@@ -302,7 +315,7 @@ router.post("/login", validCredentials, async (req, res) => {
   }
 });
 
-router.post("/send-reset-password", validCredentials, async (req, res) => {
+router.post("/send-reset-password", async (req, res) => {
   try {
     const { email } = req.body;
 
@@ -314,7 +327,7 @@ router.post("/send-reset-password", validCredentials, async (req, res) => {
     const user = await pool.query(`
       SELECT *
       FROM users
-      WHERE email = $1`, [email]
+      WHERE email = $1 && is_verified = true && using_oauth = false`, [email]
     );
 
     // Don't reveal if user exists (security best practice)
@@ -346,6 +359,48 @@ router.post("/send-reset-password", validCredentials, async (req, res) => {
     }
 
     res.json({ message: "Reset password email sent. Please check your inbox." });
+
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).json("Internal Server Error");
+  }
+});
+
+router.post("/reset-password", validCredentials, async (req, res) => {
+  try {
+    const { password, confirmPassword, token } = req.body;
+
+    if (!password || !confirmPassword || !token) {
+      return res.status(400).json("All fields are required");
+    }
+
+    if (password !== confirmPassword) {
+      return res.status(400).json("Passwords do not match");
+    }
+
+    // Check if reset token is valid
+    const user = await pool.query(`
+      SELECT *
+      FROM users
+      WHERE reset_token = $1 AND reset_token_expiry > NOW()
+    `, [token]);
+
+    if (user.rows.length === 0) {
+      console.log("Invalid or expired reset token used:", token);
+      return res.status(400).json({error: "Invalid or expired reset token - please request a new password reset"});
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Update user's password and clear reset token
+    await pool.query(`
+      UPDATE users
+      SET password = $1, reset_token = NULL, reset_token_expiry = NULL
+      WHERE userid = $2
+    `, [hashedPassword, user.rows[0].userid]);
+
+    res.json({ message: "Password has been reset successfully" });
 
   } catch (error) {
     console.error(error.message);

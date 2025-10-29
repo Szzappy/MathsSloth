@@ -1,3 +1,19 @@
+DROP TABLE IF EXISTS grade_predictions CASCADE;
+DROP TABLE IF EXISTS topic_mastery_snapshots CASCADE;
+DROP MATERIALIZED VIEW IF EXISTS user_topic_mastery CASCADE;
+DROP TABLE IF EXISTS question_attempts CASCADE;
+DROP TABLE IF EXISTS quiz_questions CASCADE;
+DROP TABLE IF EXISTS quiz_custom_topics CASCADE;
+DROP TABLE IF EXISTS quizzes CASCADE;
+DROP TABLE IF EXISTS question_topics CASCADE;
+DROP TABLE IF EXISTS mark_scheme_items CASCADE;
+DROP TABLE IF EXISTS questions CASCADE;
+DROP TABLE IF EXISTS topics CASCADE;
+DROP TABLE IF EXISTS user_mementos CASCADE;
+DROP TABLE IF EXISTS mementos CASCADE;
+DROP TABLE IF EXISTS user_progress CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+
 -- =====================================================================================================================================================
 --                                                       USER ACCOUNTS AND AUTHORISATION/AUTHENTICATION
 -- =====================================================================================================================================================
@@ -115,8 +131,9 @@ CREATE INDEX idx_user_mementos_userid ON user_mementos(userid);
 
 CREATE TABLE topics (
   topicid SERIAL PRIMARY KEY,
+  topic_code VARCHAR(50) NOT NULL UNIQUE,
   topic_name VARCHAR(255) NOT NULL,
-  parent_topic INTEGER REFERENCES topics(topicid) ON DELETE SET NULL,
+  parent_topic VARCHAR(50) REFERENCES topics(topic_code) ON DELETE SET NULL,
 
   exam_weight DECIMAL(3,2) DEFAULT 1.0 -- total digits: 3, digits after decimal: 2
 );
@@ -157,11 +174,11 @@ CREATE INDEX idx_mark_scheme_questionid ON mark_scheme_items(questionid, item_or
 -- A question can have multiple topics
 CREATE TABLE question_topics (
   questionid INTEGER REFERENCES questions(questionid) ON DELETE CASCADE,
-  topicid INTEGER REFERENCES topics(topicid) ON DELETE CASCADE,
-  PRIMARY KEY (questionid, topicid)
+  topic_code VARCHAR(50) REFERENCES topics(topic_code) ON DELETE CASCADE,
+  PRIMARY KEY (questionid, topic_code)
 );
 
-CREATE INDEX idx_question_topics_topicid ON question_topics(topicid);
+CREATE INDEX idx_question_topics_topicid ON question_topics(topic_code);
 CREATE INDEX idx_questions_difficulty ON questions(difficulty);
 
 

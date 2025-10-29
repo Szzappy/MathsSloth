@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 
 function Login() {
   const navigate = useNavigate();
   const API_URL = import.meta.env.VITE_API_URL;
+
+  const [searchParams] = useSearchParams();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -15,6 +17,15 @@ function Login() {
   const [userEmail, setUserEmail] = useState("");
 
   const [rateLimit, setRateLimit] = useState(false);
+
+  useEffect(() => {
+    const errorParam = searchParams.get('error');
+    if (errorParam) {
+      // decode the error message from URL
+      setError(decodeURIComponent(errorParam));
+      window.history.replaceState({}, '', '/login'); // remove error param from URL
+    }
+  }, [searchParams]);
   
   const handleLogin = async (e) => {
     e.preventDefault();

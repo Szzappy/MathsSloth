@@ -12,7 +12,7 @@ function QuestionCard({ question }) {
     return parts.map((part, index) => {
       // Check if this part is LaTeX (starts and ends with $)
       if (part.startsWith('$') && part.endsWith('$')) {
-        // Extract the math content (remove the $ delimiters)
+        // Extract the maths content (remove the $ delimiters)
         const mathContent = part.slice(1, -1);
         return <InlineMath key={index} math={mathContent} />;
       } else {
@@ -27,8 +27,11 @@ function QuestionCard({ question }) {
       <h1>Q</h1>
       <p>{renderQuestionWithMath(question.question_text)}</p>
       <p>Difficulty: {question.difficulty}</p>
-      <p>Marks: {question.marks}</p>
+      <p>Marks: {question.total_marks}</p>
       {/* Render question content */}
+      <img src={`${question.image_url}`} 
+                                 alt="Question diagram" 
+                                 style={{ maxWidth: '500px', border: '1px solid #ddd' }}/>
     </div>
   );
 }

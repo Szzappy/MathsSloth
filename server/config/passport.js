@@ -20,6 +20,15 @@ passport.use(
           [profile.emails[0].value]
         );
 
+        const nonOAuthUser = await pool.query(
+          "SELECT * FROM users WHERE email = $1 AND using_oauth = false",
+          [profile.emails[0].value]
+        );
+
+        if (nonOAuthUser.rows.length > 0) {
+          return done(null, false, { message: "An account with this email already exists. Please log in using your email and password." });
+        }
+
         if (existingUser.rows.length > 0) {
           return done(null, existingUser.rows[0]);
         }
