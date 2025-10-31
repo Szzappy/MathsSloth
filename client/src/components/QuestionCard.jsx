@@ -1,38 +1,35 @@
 import React from 'react'
-import 'katex/dist/katex.min.css';
-import { InlineMath } from 'react-katex';
+import { useQuiz } from '../contexts/QuizContext.jsx';
 
-function QuestionCard({ question }) {
+function QuestionCard() {
   // Component only handles rendering and user interactions
 
-  const renderQuestionWithMath = (text) => {
-    // Split the text into parts around the $ delimiters
-    const parts = text.split(/(\$[^$]+\$)/);
-    
-    return parts.map((part, index) => {
-      // Check if this part is LaTeX (starts and ends with $)
-      if (part.startsWith('$') && part.endsWith('$')) {
-        // Extract the maths content (remove the $ delimiters)
-        const mathContent = part.slice(1, -1);
-        return <InlineMath key={index} math={mathContent} />;
-      } else {
-        // This is regular text
-        return <span key={index}>{part}</span>;
-      }
-    });
-  };
+  const { getAnswer, canSubmit, renderQuestionWithMaths, currentQuestion, quiz } = useQuiz();
 
-  return (
+  const handleSubmit = (e) => {
+    e.preventDefault();
+
+    getAnswer();
+  }
+
+  const question = quiz[currentQuestion - 1];
+
+  return (<>
     <div className="question-card">
-      <h1>Q</h1>
-      <p>{renderQuestionWithMath(question.question_text)}</p>
-      <p>Difficulty: {question.difficulty}</p>
-      <p>Marks: {question.total_marks}</p>
-      {/* Render question content */}
-      <img src={`${question.image_url}`} 
-                                 alt="Question diagram" 
-                                 style={{ maxWidth: '500px', border: '1px solid #ddd' }}/>
-    </div>
+        <h1>Q{currentQuestion}</h1>
+        <p>{renderQuestionWithMaths(question.question_text)}</p>
+        {/* <p>Difficulty: {question.difficulty}</p> */}
+        <p>Marks: {question.total_marks}</p>
+        {/* Render question content */}
+        {question.image_url && (
+          <img src={`${question.image_url}`} 
+               alt="Question diagram" 
+               style={{ maxWidth: '500px', border: '1px solid #ddd' }}/>
+        )}
+      </div>
+      {canSubmit && <button onClick={handleSubmit}>Submit Answer</button>}
+  </>
+    
   );
 }
 

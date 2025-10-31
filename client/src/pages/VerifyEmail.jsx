@@ -1,10 +1,14 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { jwtDecode } from "jwt-decode";
 
 function VerifyEmail() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const API_URL = import.meta.env.VITE_API_URL;
+
+  const { login, getUserData } = useAuth();
   
   const [status, setStatus] = useState('verifying'); // verifying, success, error
   const [message, setMessage] = useState('');
@@ -39,6 +43,12 @@ function VerifyEmail() {
         // Store the JWT token if provided
         if (data.token) {
           localStorage.setItem('token', data.token);
+
+          const decoded = jwtDecode(data.token);
+          console.log("Decoded token after verification:", decoded.user);
+          getUserData(decoded.user);
+
+          // login(data.token, decoded.user);
           
           // Redirect to dashboard after 2 seconds
           setTimeout(() => {

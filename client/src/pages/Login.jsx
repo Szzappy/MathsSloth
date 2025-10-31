@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import {useAuth} from '../contexts/AuthContext';
 
 function Login() {
   const navigate = useNavigate();
   const API_URL = import.meta.env.VITE_API_URL;
+  const { login } = useAuth();
 
   const [searchParams] = useSearchParams();
 
@@ -45,7 +47,7 @@ function Login() {
 
       if (response.ok && data.token) {
         // Login successful
-        localStorage.setItem('token', data.token);
+        login(data.token, data.username);
         navigate("/dashboard");
       } else if (response.status === 403 && data.needsVerification) {
         // Email not verified

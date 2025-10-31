@@ -27,7 +27,7 @@ const authLimiter = rateLimit({
   skip: (req) => {
     // Skip rate limiting for verify email route
     return req.path === '/verify-email' 
-        || req.path === '/reset-password';
+        || req.path === '/reset-password'
   },
   message: {
     error: "Too many requests, please try again later",

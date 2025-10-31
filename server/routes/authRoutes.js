@@ -307,7 +307,7 @@ router.post("/login", validCredentials, async (req, res) => {
 
     // Generate token on successful login
     const token = jwtGenerator(user.rows[0].userid, rememberMe);
-    res.json({ token: token });
+    res.json({ token: token, username: user.rows[0].username });
 
   } catch (error) {
     console.error("Login error:", error.message);

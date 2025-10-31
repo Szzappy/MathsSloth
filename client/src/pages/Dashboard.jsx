@@ -2,28 +2,31 @@ import React, {useEffect, useState} from 'react'
 import {useNavigate} from 'react-router-dom'
 import GptInput from '../components/GptInput'
 import WolframInput from '../components/WolframInput'
+import { useAuth } from '../contexts/AuthContext';
 
 function Dashboard() {
   const API_URL = import.meta.env.VITE_API_URL;
   const navigate = useNavigate();
-  const [name, setName] = useState("");
+
+  const { user, logout } = useAuth();
+  console.log("USER", user);
 
   const loadQuiz = () => {
     navigate('/quiz');
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    navigate('/login')
+    logout();
+    navigate('/login');
   };
 
-  useEffect(() => {
+  /*useEffect(() => {
     const fetchDashboardData = async () => {
       try {
         console.log("dashboard")
         const token = localStorage.getItem('token');
 
-        const response = await fetch(`${API_URL}/dashboard/`, {
+        const response = await fetch(`${API_URL}/dashboard/get-user/${user.id}`, {
           method: "GET",
           headers: {
             'token': token,
@@ -31,27 +34,27 @@ function Dashboard() {
           }
         });
 
-        if (response.status === 403) {
+        /*if (response.status === 403) {
           localStorage.removeItem('token')
           navigate('/register')
         }
 
         const data = await response.json();
 
-        setName(data.username)
+        // setName(data.username)
       } catch (error) {
         console.error('Failed to fetch dashboard', error.message)
       }
     }
     
     fetchDashboardData();
-  }, [])
+  }, [])*/
   
 
   return (
     <>
       <div className='title'>
-        <h1>Welcome {name}</h1>
+        <h1>Welcome {user}</h1>
       </div>
       <button onClick={handleLogout}>
         Logout
