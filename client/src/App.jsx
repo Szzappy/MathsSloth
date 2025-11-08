@@ -48,6 +48,7 @@ function App() {
 
   return (
     <AuthProvider>
+      <QuizProvider>
       <BrowserRouter>
         <Routes>
           {/* If we are logged in already, just head back into the dashboard, otherwise you go to the login page */}
@@ -83,6 +84,7 @@ function App() {
               } 
             />
 
+          
           <Route 
               path="/verify-email" 
               element={
@@ -104,7 +106,7 @@ function App() {
             />
 
           {/* PROTECTED ROUTES - With Navbar */}
-          <Route 
+            <Route 
               path="/dashboard" 
               element={
                 <ProtectedRoute>
@@ -120,13 +122,12 @@ function App() {
               element={
                 <ProtectedRoute>
                   <Layout showNavbar={true}>
-                    <QuizProvider>
                       <Quiz />
-                    </QuizProvider>
                   </Layout>
                 </ProtectedRoute>
               } 
             />
+          
 
           {/* OAuth and Reset Password can be flexible */}
           <Route 
@@ -148,7 +149,8 @@ function App() {
             />
 
         </Routes>
-      </BrowserRouter>
+        </BrowserRouter>
+      </QuizProvider>
     </AuthProvider>
   )
 }

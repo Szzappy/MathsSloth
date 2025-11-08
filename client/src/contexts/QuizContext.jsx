@@ -1,6 +1,7 @@
-import { useContext, createContext, useState } from 'react'
+import { useContext, createContext, useState, useEffect } from 'react'
 import 'katex/dist/katex.min.css';
 import { InlineMath } from 'react-katex';
+import { useAuth } from './AuthContext';
 
 const QuizContext = createContext();
 
@@ -8,16 +9,71 @@ export const QuizProvider = ({ children }) => {
   const [quiz, setQuiz] = useState([]);
   const [currentQuestion, setCurrentQuestion] = useState(1);
   const [markScheme, setMarkScheme] = useState([]);
+  const { user, userid } = useAuth();
+  const [quizid, setQuizid] = useState(null);
 
   const [showAnswerCard, setShowAnswerCard] = useState(false);
   const [canSubmit, setCanSubmit] = useState(true);
 
   const API_URL = import.meta.env.VITE_API_URL;
 
+  /*useEffect(() => {
+    // want to check if there is an ongoing quiz for the user
+    // if so then set that quiz data instead of fetching new quiz
+    // set a boolean to true if there is an ongoing quiz
+    console.log("USER IN QUIZ CONTEXT", userid);
+    if (userid && continueQuiz(userid)) {
+      setOngoingQuiz(true);
+      console.log("Ongoing quiz found");
+    }
+    else {
+      setOngoingQuiz(false);
+    }
+
+  }, []);*/
+
+  const continueQuiz = async (userid) => {
+    console.log("CHECKING ONGOING QUIZ FOR USERID", userid);
+    if (!userid) return false;
+    try {
+      const response = await fetch(`${API_URL}/quiz/${userid}`, {
+        method: "GET",
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("ONGOING QUIZ DATA", data);
+      // Ensure data is an array and not null
+      if (Array.isArray(data.questions) && data.questions !== null) {
+        setQuiz(data.questions);
+        setQuizid(data.quizid);
+        console.log("true");
+        return true;
+      } else {
+        console.error("Expected array but got:", typeof data);
+        setQuiz([]);
+        return false;
+      }
+    } catch (error) {
+      console.log("Error fetching already quiz data", error.message);
+      return false;
+    }
+  };
+
   const getQuizData = async () => {
     try {
-        const response = await fetch(`${API_URL}/quiz/get-quiz`, {
-          method: "GET"
+        const response = await fetch(`${API_URL}/quiz`, {
+          method: "POST",
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ userid, quiz_type: "standard", quiz_mode: "practice" })
         });
         
         if (!response.ok) {
@@ -30,6 +86,7 @@ export const QuizProvider = ({ children }) => {
         // Ensure data is an array
         if (Array.isArray(data.questions)) {
           setQuiz(data.questions);
+          setQuizid(data.quizid);
         } else {
           console.error("Expected array but got:", typeof data);
           setQuiz([]);
@@ -93,7 +150,7 @@ export const QuizProvider = ({ children }) => {
   };
 
   return (
-    <QuizContext.Provider value={{ quiz, currentQuestion, getQuizData, markScheme, nextQuestion, getAnswer, showAnswerCard, canSubmit, renderQuestionWithMaths }}>
+    <QuizContext.Provider value={{ quiz, quizid, currentQuestion, setCurrentQuestion, getQuizData, markScheme, nextQuestion, getAnswer, showAnswerCard, canSubmit, renderQuestionWithMaths, continueQuiz }}>
       {children}
     </QuizContext.Provider>
   )

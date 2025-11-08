@@ -227,6 +227,7 @@ CREATE TABLE quiz_questions (
   quizid INTEGER REFERENCES quizzes(quizid) ON DELETE CASCADE,
   questionid INTEGER REFERENCES questions(questionid) ON DELETE CASCADE,
   question_order INTEGER NOT NULL,
+  is_complete BOOLEAN DEFAULT FALSE,
   PRIMARY KEY (quizid, questionid)
 );
 
@@ -240,7 +241,7 @@ CREATE TABLE question_attempts (
   attemptid SERIAL PRIMARY KEY,
   userid INTEGER REFERENCES users(userid) ON DELETE CASCADE,
   questionid INTEGER REFERENCES questions(questionid) ON DELETE CASCADE,
-  quizid INTEGER REFERENCES quizzes(quizid) ON DELETE SET NULL,
+  quizid INTEGER REFERENCES quizzes(quizid) ON DELETE CASCADE,
 
   user_answer TEXT,
   is_correct BOOLEAN, -- used for mcq questions
@@ -250,7 +251,7 @@ CREATE TABLE question_attempts (
   marks_available INTEGER,
 
   confidence INTEGER CHECK (confidence BETWEEN 1 AND 5),
-  time_taken INTEGER NOT NULL, -- in seconds
+  time_taken INTEGER, -- in seconds
   hints_used INTEGER DEFAULT 0,
 
   ease_factor DECIMAL(3,2) DEFAULT 2.5,

@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {useNavigate} from 'react-router-dom'
 import QuestionCard from '../components/QuestionCard';
 import { useQuiz } from '../contexts/QuizContext.jsx';
 import AnswerCard from '../components/AnswerCard.jsx';
+import { useAuth } from '../contexts/AuthContext.jsx';
 
 function Quiz() {
   const API_URL = import.meta.env.VITE_API_URL;
+  const quizLoadedRef = useRef(false);
 
-  const { quiz, currentQuestion, getQuizData, showAnswerCard } = useQuiz();
+  const { userid } = useAuth();
+  const { quiz, currentQuestion, getQuizData, showAnswerCard, continueQuiz } = useQuiz();
 
   //const [questions, setQuestions] = useState([]);
   //const [currentQuestion, setCurrentQuestion] = useState(1);
@@ -22,7 +25,17 @@ function Quiz() {
   // need useeffect to fetch quiz data on component mount
   useEffect(() => {
     document.title = "Quiz - Maths Sloth";
-    getQuizData();
+
+    const checkOngoingQuiz = async () => {
+      const ongoing = await continueQuiz(userid);
+      if (quizLoadedRef.current) return;
+      quizLoadedRef.current = true;
+      if (!ongoing) {
+        getQuizData();
+        console.log("new quiz fetched");
+      }
+    };
+    checkOngoingQuiz();
   }, []);
 
   return (

@@ -25,7 +25,7 @@ async function seed() {
         "item_description": "M1: Attempts to multiply out the brackets of the numerator and writes the expression as a sum of terms with indices. Award for either one correct index of $x^{\\frac{3}{2}}$ or $x^{\\frac{1}{2}}$ which comes from a correct method. The $\\frac{1}{3}$ does not need to be considered for this mark.",
         "marks_available": 1,
         "item_type": "M",
-        "is_mandatory": false
+        "is_mandatory": true
         },
         {
         "item_order": 2,
@@ -39,7 +39,7 @@ async function seed() {
         "item_description": "dM1: Increases the power by one on an $x^n$ term where n is a fraction (e.g. $x^{\\frac{3}{2}} \\rightarrow x^{\\frac{3}{2}+1}$ or $x^{\\frac{1}{2}} \\rightarrow x^{\\frac{1}{2}+1}$). The index does not need to be processed. Dependent on the previous method mark.",
         "marks_available": 1,
         "item_type": "M",
-        "is_mandatory": false
+        "is_mandatory": true
         },
         {
         "item_order": 4,

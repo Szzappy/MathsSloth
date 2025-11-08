@@ -5,6 +5,7 @@ const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [userid, setUserid] = useState(null);
   const [loading, setLoading] = useState(false);
   const API_URL = import.meta.env.VITE_API_URL;
 
@@ -18,6 +19,7 @@ export const AuthProvider = ({ children }) => {
       console.log("HELLO THIS IS RESPONSE", response)
       const data = await response.json();
       setUser(data.username || null);
+      setUserid(userId || null);
     } catch (error) {
       console.error("Error fetching user data:", error);
     }
@@ -57,7 +59,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading, getUserData }}>
+    <AuthContext.Provider value={{ user, userid, login, logout, loading, getUserData }}>
       {children}
     </AuthContext.Provider>
   );
