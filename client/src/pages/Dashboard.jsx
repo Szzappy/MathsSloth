@@ -4,6 +4,7 @@ import GptInput from '../components/GptInput'
 import WolframInput from '../components/WolframInput'
 import { useAuth } from '../contexts/AuthContext';
 import { useQuiz } from '../contexts/QuizContext';
+import QuizSetupModal from '../components/QuizSetupModal';
 
 function Dashboard() {
   const API_URL = import.meta.env.VITE_API_URL;
@@ -13,6 +14,7 @@ function Dashboard() {
   const { getQuizData, continueQuiz, setCurrentQuestion } = useQuiz();
   console.log("USER", user);
   const [canContinue, setCanContinue] = useState(false);
+  const [isQuizModalOpen, setIsQuizModalOpen] = useState(false);
 
   useEffect(() => {
     document.title = "Dashboard";
@@ -38,6 +40,14 @@ function Dashboard() {
     logout();
     navigate('/login');
   };
+
+  const openQuizModal = () => {
+    setIsQuizModalOpen(true);
+  }
+
+  const closeQuizModal = () => {
+    setIsQuizModalOpen(false);
+  }
 
   /*useEffect(() => {
     const fetchDashboardData = async () => {
@@ -80,9 +90,10 @@ function Dashboard() {
       </button>
       
       <div>
-        <button onClick={loadQuiz}>
+        <button onClick={canContinue ? loadQuiz : openQuizModal}>
           {canContinue ? "Resume Quiz" : "Start Quiz"}
         </button>
+        {isQuizModalOpen && <QuizSetupModal onClose={closeQuizModal}/>}
         <GptInput />
         <WolframInput />
       </div>

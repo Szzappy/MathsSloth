@@ -6,12 +6,13 @@ const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [userid, setUserid] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const API_URL = import.meta.env.VITE_API_URL;
 
 
   const getUserData = async (userId) => {
     try {
+      setLoading(true);
       const response = await fetch(`${API_URL}/dashboard/get-user/${userId}`, {
         method: "GET",
         headers: {"Content-Type": "application/json"}
@@ -22,6 +23,8 @@ export const AuthProvider = ({ children }) => {
       setUserid(userId || null);
     } catch (error) {
       console.error("Error fetching user data:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -43,6 +46,7 @@ export const AuthProvider = ({ children }) => {
         setUser(null);
       }
     }
+    setLoading(false);
   }, []);
 
   const login = (token, userData) => {

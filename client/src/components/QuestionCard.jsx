@@ -16,7 +16,7 @@ function QuestionCard() {
 
   return (<>
     <div className="question-card">
-        <h1>Q{currentQuestion}</h1>
+        <h1>Q{question.question_order || currentQuestion}</h1>
         <p>{renderQuestionWithMaths(question.question_text)}</p>
         {/* <p>Difficulty: {question.difficulty}</p> */}
         <p>Marks: {question.total_marks}</p>
@@ -29,7 +29,6 @@ function QuestionCard() {
       </div>
       {canSubmit && <button onClick={handleSubmit}>Submit Answer</button>}
   </>
-    
   );
 }
 

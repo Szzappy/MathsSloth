@@ -6,7 +6,9 @@ const router = express.Router();
 
 router.post("/", async (req, res) => {
   try {
-    const { userid, quiz_type, quiz_mode, using_custom_difficulty, custom_difficulty_min, custom_difficulty_max, custom_question_count } = req.body;
+    const { userid, quiz_type, quiz_mode, topics, using_custom_difficulty, custom_difficulty_min, custom_difficulty_max, custom_question_count } = req.body;
+
+    console.log("Generating quiz for user:", userid, "with parameters:", req.body);
 
     const quizResult = await pool.query(`
       INSERT INTO quizzes (userid, quiz_type, quiz_mode, using_custom_difficulty, custom_difficulty_min, custom_difficulty_max, custom_question_count)
@@ -16,11 +18,42 @@ router.post("/", async (req, res) => {
 
     const quizId = quizResult.rows[0].quizid;
 
-    const questions = await pool.query(`
+    let query = ``;
+    let queryParams = [];
+
+    // if quiz_type is "custom", filter questions based on topics and difficulty
+    if (quiz_type === "custom") {
+      // if not using custom difficulty, set min and max to defaults
+      // refine to choose at least one question per topic
+
+      // select the topic_codes's based on their topic ids
+      const topic_codes = await pool.query(`
+        SELECT topic_code FROM topics
+        WHERE topicid = ANY($1)
+      `, [topics]);
+
+      console.log("Topic codes for selected topics:", topic_codes.rows);
+
+      query = `
+        SELECT DISTINCT(q.questionid), q.question_text, q.image_url, q.question_format, q.correct_answer, q.difficulty, q.total_marks
+        FROM questions q
+        JOIN question_topics qt ON q.questionid = qt.questionid
+        WHERE qt.topic_code = ANY($1)
+        -- AND q.difficulty BETWEEN $2 AND $3
+        LIMIT $2
+      `;
+      queryParams = [topic_codes.rows.map(row => row.topic_code), /*custom_difficulty_min, custom_difficulty_max, */custom_question_count];
+    }
+
+    const questions = await pool.query(query, queryParams);
+
+    console.log("Questions fetched for quiz:", questions.rows);
+
+    /*const questions = await pool.query(`
       SELECT DISTINCT(q.questionid), q.question_text, q.image_url, q.question_format, q.correct_answer, q.difficulty, q.total_marks
       FROM questions q
       JOIN question_topics qt ON q.questionid = qt.questionid
-    `);
+    `);*/
 
     await Promise.all(
       questions.rows.map((q, index) =>
@@ -31,6 +64,7 @@ router.post("/", async (req, res) => {
       )
     );
     
+    // return the index of each question as well
     return res.status(200).json({ questions: questions.rows, quizid: quizId });
   } catch (error) {
     console.error("Error fetching questions:", error);
@@ -79,6 +113,19 @@ router.post("/submit-answer", async (req, res) => {
   }
 });
 
+router.get("/topics", async (req, res) => {
+  try {
+    const topicsResult = await pool.query(`
+      SELECT * FROM topics
+    `);
+
+    res.status(200).json({ topics: topicsResult.rows });
+  } catch (error) {
+    console.error("Error fetching topics:", error);
+    res.status(500).json({ error: "Failed to fetch topics" });
+  }
+});
+
 router.get("/:userid", async (req, res) => {
   try {
     const { userid } = req.params;
@@ -91,15 +138,16 @@ router.get("/:userid", async (req, res) => {
     // want to get the questions from the questions table whose questionid is in the quiz_questions table
     // need the quiz id too
     const unansweredQuestions = await pool.query(`
-    SELECT DISTINCT(q.questionid), q.question_text, q.image_url, q.question_format, q.correct_answer, q.difficulty, q.total_marks, quiz_questions.question_order, quiz_questions.quizid
-    FROM questions q
-    JOIN question_topics qt ON q.questionid = qt.questionid
-    JOIN quiz_questions ON q.questionid = quiz_questions.questionid
-    WHERE quiz_questions.is_complete = FALSE
-    AND quiz_questions.quizid IN (
-      SELECT quizid FROM quizzes WHERE userid = $1
-    )
-    ORDER BY quiz_questions.question_order ASC`, [userIdInt]);
+      SELECT DISTINCT(q.questionid), q.question_text, q.image_url, q.question_format, q.correct_answer, q.difficulty, q.total_marks, quiz_questions.question_order, quiz_questions.quizid
+      FROM questions q
+      JOIN question_topics qt ON q.questionid = qt.questionid
+      JOIN quiz_questions ON q.questionid = quiz_questions.questionid
+      WHERE quiz_questions.is_complete = FALSE
+      AND quiz_questions.quizid IN (
+        SELECT quizid FROM quizzes WHERE userid = $1
+      )
+      ORDER BY quiz_questions.question_order ASC`
+    , [userIdInt]);
 
     console.log("Unanswered questions fetched:", unansweredQuestions.rows.length > 0 ? unansweredQuestions.rows : null, unansweredQuestions.rows.length > 0 ? unansweredQuestions.rows[0].quizid : null );
 
@@ -112,6 +160,8 @@ router.get("/:userid", async (req, res) => {
     res.status(500).json({ error: "Failed to generate quiz" });
   }
 });
+
+
 export default router;
 
 

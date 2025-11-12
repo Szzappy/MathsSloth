@@ -10,7 +10,7 @@ function Quiz() {
   const quizLoadedRef = useRef(false);
 
   const { userid } = useAuth();
-  const { quiz, currentQuestion, getQuizData, showAnswerCard, continueQuiz } = useQuiz();
+  const { quiz, currentQuestion, getQuizData, showAnswerCard, continueQuiz, loading } = useQuiz();
 
   //const [questions, setQuestions] = useState([]);
   //const [currentQuestion, setCurrentQuestion] = useState(1);
@@ -26,6 +26,8 @@ function Quiz() {
   useEffect(() => {
     document.title = "Quiz - Maths Sloth";
 
+    if (!userid || loading) return;
+
     const checkOngoingQuiz = async () => {
       const ongoing = await continueQuiz(userid);
       if (quizLoadedRef.current) return;
@@ -36,7 +38,7 @@ function Quiz() {
       }
     };
     checkOngoingQuiz();
-  }, []);
+  }, [userid, loading]);
 
   return (
     <>

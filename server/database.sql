@@ -214,6 +214,8 @@ CREATE TABLE quizzes (
 CREATE INDEX idx_quizzes_userid ON quizzes(userid, created_at DESC);
 CREATE INDEX idx_quizzes_completed ON quizzes(userid, completed_at DESC);
 
+
+-- check if we need this table
 CREATE TABLE quiz_custom_topics (
   quizid INTEGER REFERENCES quizzes(quizid) ON DELETE CASCADE,
   topicid INTEGER REFERENCES topics(topicid) ON DELETE CASCADE,

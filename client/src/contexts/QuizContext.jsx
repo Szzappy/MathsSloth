@@ -11,6 +11,16 @@ export const QuizProvider = ({ children }) => {
   const [markScheme, setMarkScheme] = useState([]);
   const { user, userid } = useAuth();
   const [quizid, setQuizid] = useState(null);
+  const [topics, setTopics] = useState([]);
+
+  // custom quiz parameters
+  const [quizType, setQuizType] = useState('custom'); 
+  const [quizMode, setQuizMode] = useState('');
+  const [customTopics, setCustomTopics] = useState([]);
+  const [numQuestions, setNumQuestions] = useState(10);
+  const [lowerDifficulty, setLowerDifficulty] = useState(1);
+  const [upperDifficulty, setUpperDifficulty] = useState(5);
+  const [usingAdaptiveDifficulty, setUsingAdaptiveDifficulty] = useState(true);
 
   const [showAnswerCard, setShowAnswerCard] = useState(false);
   const [canSubmit, setCanSubmit] = useState(true);
@@ -31,6 +41,16 @@ export const QuizProvider = ({ children }) => {
     }
 
   }, []);*/
+
+  const setCustomParameters = (quizType, quizMode, topics, numQuestions, lowerDifficulty, upperDifficulty, usingAdaptiveDifficulty) => {
+    setQuizType(quizType);
+    setQuizMode(quizMode);
+    setCustomTopics(topics);
+    setNumQuestions(numQuestions);
+    setLowerDifficulty(lowerDifficulty);
+    setUpperDifficulty(upperDifficulty);
+    setUsingAdaptiveDifficulty(usingAdaptiveDifficulty);
+  }
 
   const continueQuiz = async (userid) => {
     console.log("CHECKING ONGOING QUIZ FOR USERID", userid);
@@ -66,6 +86,27 @@ export const QuizProvider = ({ children }) => {
     }
   };
 
+  const getTopics = async () => {
+    try {
+        const response = await fetch(`${API_URL}/quiz/topics`, {
+          method: "GET"
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        if (Array.isArray(data.topics)) {
+          setTopics(data.topics);
+        } else {
+          console.error("Expected array but got:", typeof data);
+          setTopics([]);
+        }
+      } catch (error) {
+        console.log("Error fetching topics", error.message);
+        setTopics([]);
+      }
+  };
+
   const getQuizData = async () => {
     try {
         const response = await fetch(`${API_URL}/quiz`, {
@@ -73,7 +114,10 @@ export const QuizProvider = ({ children }) => {
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ userid, quiz_type: "standard", quiz_mode: "practice" })
+          body: JSON.stringify({ userid, quiz_type: quizType, quiz_mode: quizMode, 
+            topics: customTopics, custom_question_count: numQuestions, 
+            custom_difficulty_min: lowerDifficulty, custom_difficulty_max: upperDifficulty, 
+            using_custom_difficulty: !usingAdaptiveDifficulty })
         });
         
         if (!response.ok) {
@@ -150,7 +194,8 @@ export const QuizProvider = ({ children }) => {
   };
 
   return (
-    <QuizContext.Provider value={{ quiz, quizid, currentQuestion, setCurrentQuestion, getQuizData, markScheme, nextQuestion, getAnswer, showAnswerCard, canSubmit, renderQuestionWithMaths, continueQuiz }}>
+    <QuizContext.Provider value={{ quiz, quizid, currentQuestion, setCurrentQuestion, getQuizData, markScheme, nextQuestion, 
+                                  getAnswer, showAnswerCard, canSubmit, renderQuestionWithMaths, continueQuiz, getTopics, topics, setCustomParameters }}>
       {children}
     </QuizContext.Provider>
   )
