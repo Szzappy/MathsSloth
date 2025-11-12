@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, use } from 'react'
 import {useNavigate} from 'react-router-dom'
 import QuestionCard from '../components/QuestionCard';
 import { useQuiz } from '../contexts/QuizContext.jsx';
@@ -8,9 +8,10 @@ import { useAuth } from '../contexts/AuthContext.jsx';
 function Quiz() {
   const API_URL = import.meta.env.VITE_API_URL;
   const quizLoadedRef = useRef(false);
+  const navigate = useNavigate();
 
   const { userid } = useAuth();
-  const { quiz, currentQuestion, getQuizData, showAnswerCard, continueQuiz, loading } = useQuiz();
+  const { quiz, currentQuestion, getQuizData, showAnswerCard, continueQuiz, loading, getResults } = useQuiz();
 
   //const [questions, setQuestions] = useState([]);
   //const [currentQuestion, setCurrentQuestion] = useState(1);
@@ -48,7 +49,14 @@ function Quiz() {
         ) : (
           (() => {
             const q = quiz[currentQuestion - 1];
-            return q ? (
+            if (!q) {
+              // if there is no question, it means the quiz is complete
+              // so we need to fetch results and navigate to results page
+              // getResults(userid);
+              navigate('/quiz-completed');
+              return null;
+            }
+            return (
               <div>
               <QuestionCard
                 key={q.id}
@@ -56,12 +64,8 @@ function Quiz() {
                 question={q}
               />
 
-
               {showAnswerCard && <AnswerCard />}
               </div>
-
-            ) : (
-              <p>No question available</p>
             );
           })()
         )}

@@ -13,6 +13,9 @@ export const QuizProvider = ({ children }) => {
   const [quizid, setQuizid] = useState(null);
   const [topics, setTopics] = useState([]);
 
+  const [overallResults, setOverallResults] = useState(null);
+  const [individualTopicStats, setIndividualTopicStats] = useState([]);
+
   // custom quiz parameters
   const [quizType, setQuizType] = useState('custom'); 
   const [quizMode, setQuizMode] = useState('');
@@ -76,7 +79,7 @@ export const QuizProvider = ({ children }) => {
         console.log("true");
         return true;
       } else {
-        console.error("Expected array but got:", typeof data);
+        // console.error("Expected array but got:", typeof data);
         setQuiz([]);
         return false;
       }
@@ -105,6 +108,26 @@ export const QuizProvider = ({ children }) => {
         console.log("Error fetching topics", error.message);
         setTopics([]);
       }
+  };
+
+  const getResults = async (userid) => {
+    try {
+      const response = await fetch(`${API_URL}/quiz/results/${userid}`, {
+        method: "GET",
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      console.log("Quiz results data", data);
+      setOverallResults(data.results);
+      setIndividualTopicStats(data.individualTopicStats);
+    } catch (error) {
+      console.log("Error fetching quiz results", error.message);
+    }
   };
 
   const getQuizData = async () => {
@@ -195,7 +218,8 @@ export const QuizProvider = ({ children }) => {
 
   return (
     <QuizContext.Provider value={{ quiz, quizid, currentQuestion, setCurrentQuestion, getQuizData, markScheme, nextQuestion, 
-                                  getAnswer, showAnswerCard, canSubmit, renderQuestionWithMaths, continueQuiz, getTopics, topics, setCustomParameters }}>
+                                  getAnswer, showAnswerCard, canSubmit, renderQuestionWithMaths, continueQuiz, getTopics, topics, setCustomParameters,
+                                  getResults, overallResults, individualTopicStats }}>
       {children}
     </QuizContext.Provider>
   )

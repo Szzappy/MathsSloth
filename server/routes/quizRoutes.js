@@ -126,6 +126,41 @@ router.get("/topics", async (req, res) => {
   }
 });
 
+router.get("/results/:userid", async (req, res) => {
+  try {
+    // we want to get the results of the most recent quiz taken by a user
+    const { userid } = req.params;
+    console.log("Fetching quiz results for user ID:", userid);
+
+    const overallStats = await pool.query(`
+      SELECT qa.quizid, SUM(qa.marks_awarded) AS total_marks_awarded, SUM(qa.marks_available) AS total_marks_available
+      FROM question_attempts qa 
+      WHERE qa.userid = $1
+      GROUP BY qa.quizid
+      ORDER BY qa.quizid DESC
+      LIMIT 1
+    `, [userid]);
+
+    // also break it down per topic
+    const individualTopicStats = await pool.query(`
+      SELECT t.topic_code, t.topic_name, SUM(qa.marks_awarded) AS marks_awarded, SUM(qa.marks_available) AS marks_available
+      FROM question_attempts qa
+      JOIN question_topics qt ON qa.questionid = qt.questionid
+      JOIN topics t ON qt.topic_code = t.topic_code
+      WHERE qa.userid = $1 AND qa.quizid = (SELECT quizid FROM quizzes WHERE userid = $1 ORDER BY quizid DESC LIMIT 1)
+      GROUP BY t.topic_code, t.topic_name
+    `, [userid]);
+
+    console.log("Overall stats:", overallStats.rows);
+    console.log("Individual topic stats:", individualTopicStats.rows);
+
+    res.status(200).json({ results: overallStats.rows.length > 0 ? overallStats.rows[0] : null, individualTopicStats: individualTopicStats.rows });
+  } catch (error) {
+    console.error("Error fetching quiz results:", error);
+    res.status(500).json({ error: "Failed to fetch quiz results" });
+  }
+});
+
 router.get("/:userid", async (req, res) => {
   try {
     const { userid } = req.params;
@@ -160,6 +195,7 @@ router.get("/:userid", async (req, res) => {
     res.status(500).json({ error: "Failed to generate quiz" });
   }
 });
+
 
 
 export default router;
