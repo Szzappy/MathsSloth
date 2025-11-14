@@ -87,15 +87,6 @@ function App() {
 
           
           <Route 
-              path="/verify-email" 
-              element={
-                <Layout showNavbar={false}>
-                  <VerifyEmail />
-                </Layout>
-              } 
-            />
-
-          <Route 
               path="/forgot-password" 
               element={
                 <PublicRoute>
@@ -105,6 +96,18 @@ function App() {
                 </PublicRoute>
               }
             />
+
+          {/* Make it so that you can only get to this page if you click the verification link, you cannot get to it via dashboard or anywhere else*/}
+          
+          <Route 
+              path="/verify-email" 
+              element={
+                <Layout showNavbar={false}>
+                  <VerifyEmail />
+                </Layout>
+              } 
+            />
+
 
           {/* PROTECTED ROUTES - With Navbar */}
             <Route 

@@ -74,7 +74,7 @@ function QuizSetupModal({ onClose }) {
     <div className="modal-overlay" onClick={closeModal}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>Quiz Time</h2>
+          <h2>Quiz Time!</h2>
           <button className="close-btn" onClick={closeModal}>×</button>
         </div>
 

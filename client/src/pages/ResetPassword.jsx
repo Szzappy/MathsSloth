@@ -18,7 +18,7 @@ function ResetPassword() {
     e.preventDefault();
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/reset-password`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/password/reset`, {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({password, confirmPassword, token})

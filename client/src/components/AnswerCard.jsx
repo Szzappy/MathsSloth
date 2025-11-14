@@ -53,7 +53,7 @@ function AnswerCard() {
     question_difficulty
     */
 
-    const response = await fetch(`${API_URL}/quiz/submit-answer`, {
+    const response = await fetch(`${API_URL}/quiz/answer`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

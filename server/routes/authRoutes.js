@@ -170,7 +170,7 @@ router.post("/register", validCredentials, async (req, res) => {
   }
 })
 
-router.get("/verify-email", async (req, res) => {
+router.get("/email/verify", async (req, res) => {
   try {
     const {token} = req.query;
 
@@ -214,7 +214,7 @@ router.get("/verify-email", async (req, res) => {
 })
 
 // RESEND VERIFICATION EMAIL ROUTE
-router.post("/resend-verification", async (req, res) => {
+router.post("/verification/resend", async (req, res) => {
   try {
     const { email } = req.body;
     
@@ -307,7 +307,7 @@ router.post("/login", validCredentials, async (req, res) => {
 
     // Generate token on successful login
     const token = jwtGenerator(user.rows[0].userid, rememberMe);
-    res.json({ token: token, username: user.rows[0].username });
+    res.json({ token: token, username: user.rows[0].username.length > 25 ? user.rows[0].username.substring(0, 25) + "..." : user.rows[0].username });
 
   } catch (error) {
     console.error("Login error:", error.message);
@@ -315,19 +315,19 @@ router.post("/login", validCredentials, async (req, res) => {
   }
 });
 
-router.post("/send-reset-password", async (req, res) => {
+router.post("/password/reset/email", async (req, res) => {
   try {
     const { email } = req.body;
 
     if (!email) {
       return res.status(400).json("Email is required");
     }
-
+    console.log("1")
     // Check if user exists
     const user = await pool.query(`
       SELECT *
       FROM users
-      WHERE email = $1 && is_verified = true && using_oauth = false`, [email]
+      WHERE email = $1 AND is_verified = true AND using_oauth = false`, [email]
     );
 
     // Don't reveal if user exists (security best practice)
@@ -366,7 +366,7 @@ router.post("/send-reset-password", async (req, res) => {
   }
 });
 
-router.post("/reset-password", validCredentials, async (req, res) => {
+router.post("/password/reset", validCredentials, async (req, res) => {
   try {
     const { password, confirmPassword, token } = req.body;
 

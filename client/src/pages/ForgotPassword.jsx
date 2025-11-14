@@ -6,7 +6,7 @@ function ForgotPassword() {
   const handleReset = async (e) => {
     e.preventDefault();
     // Call the API to send the reset link
-    const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/send-reset-password`, {
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/password/reset/email`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({email})

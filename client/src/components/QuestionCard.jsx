@@ -27,7 +27,7 @@ function QuestionCard() {
                style={{ maxWidth: '500px', border: '1px solid #ddd' }}/>
         )}
       </div>
-      {canSubmit && <button onClick={handleSubmit}>Submit Answer</button>}
+      {canSubmit && <button onClick={handleSubmit}>{question.question_format == "self_mark" ? "Check Answer" : "Submit Answer"}</button>}
   </>
   );
 }

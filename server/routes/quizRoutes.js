@@ -72,7 +72,8 @@ router.post("/", async (req, res) => {
   }
 })
 
-router.get("/get-mark-scheme/:questionId", async (req, res) => {
+// change to /mark-scheme/:questionId
+router.get("/mark-scheme/:questionId", async (req, res) => {
   console.log("Fetching mark scheme for question");
   const { questionId } = req.params;
   console.log("Received request for mark scheme of question ID:", questionId);
@@ -89,7 +90,8 @@ router.get("/get-mark-scheme/:questionId", async (req, res) => {
 });
 
 // make sure to update the quiz_questions table to mark questions as complete when answers are submitted
-router.post("/submit-answer", async (req, res) => {
+// change to /answer
+router.post("/answer", async (req, res) => {
   try {
     console.log("Submitting answer:", req.body);
       const { userid, questionid, quizid, marks_awarded, marks_available, question_difficulty } = req.body;

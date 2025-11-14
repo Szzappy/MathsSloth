@@ -16,6 +16,12 @@ function VerifyEmail() {
 
   useEffect(() => {
     const token = searchParams.get('token');
+
+    const alreadyExistingToken = localStorage.getItem('token');
+    if (alreadyExistingToken) {
+      navigate('/dashboard');
+      return;
+    }
     
     if (!token) {
       setStatus('error');
@@ -33,7 +39,7 @@ function VerifyEmail() {
 
   const verifyEmail = async (token) => {
     try {
-      const response = await fetch(`${API_URL}/auth/verify-email?token=${token}`);
+      const response = await fetch(`${API_URL}/auth/email/verify?token=${token}`);
       const data = await response.json();
       
       if (response.ok) {

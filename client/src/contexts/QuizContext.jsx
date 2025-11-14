@@ -166,7 +166,7 @@ export const QuizProvider = ({ children }) => {
 
   const getAnswer = async () => {
     try {
-        const response = await fetch(`${API_URL}/quiz/get-mark-scheme/${quiz[currentQuestion - 1].questionid}`, {
+        const response = await fetch(`${API_URL}/quiz/mark-scheme/${quiz[currentQuestion - 1].questionid}`, {
           method: "GET"
         });
         

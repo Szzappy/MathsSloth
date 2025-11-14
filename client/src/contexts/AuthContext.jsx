@@ -19,6 +19,11 @@ export const AuthProvider = ({ children }) => {
       });
       console.log("HELLO THIS IS RESPONSE", response)
       const data = await response.json();
+      // check if username is longer than 25 characters, if so truncate it
+      if (data.username && data.username.length > 25) {
+        data.username = data.username.substring(0, 25) + "...";
+      }
+
       setUser(data.username || null);
       setUserid(userId || null);
     } catch (error) {
