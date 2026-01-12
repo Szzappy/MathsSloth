@@ -94,8 +94,8 @@ function Dashboard() {
           {canContinue ? "Resume Quiz" : "Start Quiz"}
         </button>
         {isQuizModalOpen && <QuizSetupModal onClose={closeQuizModal}/>}
-        <GptInput />
-        <WolframInput />
+        {/* <GptInput /> */}
+        {/* <WolframInput /> */}
       </div>
     </>
   )

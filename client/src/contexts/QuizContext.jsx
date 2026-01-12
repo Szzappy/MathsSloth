@@ -12,6 +12,7 @@ export const QuizProvider = ({ children }) => {
   const { user, userid } = useAuth();
   const [quizid, setQuizid] = useState(null);
   const [topics, setTopics] = useState([]);
+  const [confidence, setConfidence] = useState(null); // default confidence level
 
   const [overallResults, setOverallResults] = useState(null);
   const [individualTopicStats, setIndividualTopicStats] = useState([]);
@@ -219,7 +220,7 @@ export const QuizProvider = ({ children }) => {
   return (
     <QuizContext.Provider value={{ quiz, quizid, currentQuestion, setCurrentQuestion, getQuizData, markScheme, nextQuestion, 
                                   getAnswer, showAnswerCard, canSubmit, renderQuestionWithMaths, continueQuiz, getTopics, topics, setCustomParameters,
-                                  getResults, overallResults, individualTopicStats }}>
+                                  getResults, overallResults, individualTopicStats, confidence, setConfidence }}>
       {children}
     </QuizContext.Provider>
   )

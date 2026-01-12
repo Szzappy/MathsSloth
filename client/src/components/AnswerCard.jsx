@@ -3,7 +3,7 @@ import { useQuiz } from '../contexts/QuizContext.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
 
 function AnswerCard() {
-  const { quizid, currentQuestion, markScheme, renderQuestionWithMaths, nextQuestion, quiz } = useQuiz();
+  const { quizid, currentQuestion, markScheme, renderQuestionWithMaths, nextQuestion, quiz, confidence, setConfidence } = useQuiz();
   const API_URL = import.meta.env.VITE_API_URL;
   const { user, userid } = useAuth();
 
@@ -49,6 +49,7 @@ function AnswerCard() {
 
     marks_awarded
     marks_available
+    confidence_level
 
     question_difficulty
     */
@@ -64,12 +65,15 @@ function AnswerCard() {
         quizid: quizid,
         marks_awarded: selectedItems.reduce((acc) => acc + 1, 0), // add 1 for each selected item
         marks_available: quiz[currentQuestion - 1].total_marks,
+        confidence: confidence,
+        time_taken: 0, // to be implemented
         question_difficulty: quiz[currentQuestion - 1].difficulty,
       }),
     });
 
     if (response.ok) {
       const data = await response.json();
+      setConfidence(null); // reset confidence for next question
       console.log("Response from server:", data);
     } else {
       console.error("Error submitting answer:", response.statusText);
