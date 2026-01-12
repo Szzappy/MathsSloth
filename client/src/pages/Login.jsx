@@ -1,9 +1,13 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import {useAuth} from '../contexts/AuthContext';
 
 function Login() {
   const navigate = useNavigate();
   const API_URL = import.meta.env.VITE_API_URL;
+  const { login } = useAuth();
+
+  const [searchParams] = useSearchParams();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -15,6 +19,15 @@ function Login() {
   const [userEmail, setUserEmail] = useState("");
 
   const [rateLimit, setRateLimit] = useState(false);
+
+  useEffect(() => {
+    const errorParam = searchParams.get('error');
+    if (errorParam) {
+      // decode the error message from URL
+      setError(decodeURIComponent(errorParam));
+      window.history.replaceState({}, '', '/login'); // remove error param from URL
+    }
+  }, [searchParams]);
   
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -34,7 +47,7 @@ function Login() {
 
       if (response.ok && data.token) {
         // Login successful
-        localStorage.setItem('token', data.token);
+        login(data.token, data.username);
         navigate("/dashboard");
       } else if (response.status === 403 && data.needsVerification) {
         // Email not verified
@@ -63,7 +76,7 @@ function Login() {
     setLoading(true);
     
     try {
-      const response = await fetch(`${API_URL}/auth/resend-verification`, {
+      const response = await fetch(`${API_URL}/auth/verification/resend`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: userEmail })
@@ -146,6 +159,30 @@ function Login() {
           {loading ? 'Logging in...' : 'Login'}
         </button>
       </form>
+
+      <button
+        type="button"
+        onClick={() => {
+          setError("");
+          setMessage("");
+          setLoading(true);
+          // redirect browser to the backend Google OAuth endpoint
+          window.location.href = `${API_URL}/auth/google`;
+        }}
+        disabled={loading}
+        style={{ marginTop: '0.5rem' }}
+      >
+        {loading ? 'Redirecting...' : 'Login with Google'}
+      </button>
+
+      <button
+        type="button"
+        onClick={() => navigate('/forgot-password')}
+        disabled={loading}
+        style={{ display: 'block', marginTop: '1rem' }}
+      >
+        Forgot Password?
+      </button>
       
       <div>
         <p>
