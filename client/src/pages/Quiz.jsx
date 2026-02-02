@@ -1,32 +1,20 @@
-import React, { useState, useEffect, useRef, use } from 'react'
-import {useNavigate} from 'react-router-dom'
+import React, { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import QuestionCard from '../components/QuestionCard';
 import { useQuiz } from '../contexts/QuizContext.jsx';
 import AnswerCard from '../components/AnswerCard.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import GptInput from '../components/GptInput.jsx';
 
 function Quiz() {
   const API_URL = import.meta.env.VITE_API_URL;
   const quizLoadedRef = useRef(false);
   const navigate = useNavigate();
-
   const { userid } = useAuth();
-  const { quiz, currentQuestion, getQuizData, showAnswerCard, continueQuiz, loading, getResults } = useQuiz();
+  const { quiz, currentQuestion, getQuizData, showAnswerCard, continueQuiz, loading } = useQuiz();
 
-  //const [questions, setQuestions] = useState([]);
-  //const [currentQuestion, setCurrentQuestion] = useState(1);
-
-  // user does question
-  // user hits submit answer
-  // display answer card component
-  // user hits next question
-  // increment current question
-  // if last question, go to results page
-
-  // need useeffect to fetch quiz data on component mount
   useEffect(() => {
     document.title = "Quiz - Maths Sloth";
-
     if (!userid || loading) return;
 
     const checkOngoingQuiz = async () => {
@@ -38,39 +26,56 @@ function Quiz() {
         console.log("new quiz fetched");
       }
     };
+
     checkOngoingQuiz();
   }, [userid, loading]);
 
   return (
-    <>
-      <div>
-        {quiz.length === 0 ? (
-          <p>Loading...</p>
-        ) : (
-          (() => {
-            const q = quiz[currentQuestion - 1];
-            if (!q) {
-              // if there is no question, it means the quiz is complete
-              // so we need to fetch results and navigate to results page
-              // getResults(userid);
-              navigate('/quiz-completed');
-              return null;
-            }
-            return (
-              <div>
+    <div style={{ maxWidth: '900px', margin: '0 auto', padding: '2rem' }}>
+      {quiz.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '3rem' }}>
+          <p>Loading your quiz...</p>
+        </div>
+      ) : (
+        (() => {
+          const q = quiz[currentQuestion - 1];
+          if (!q) {
+            navigate('/quiz-completed');
+            return null;
+          }
+          return (
+            <div>
+              {/* Question Section */}
               <QuestionCard
-                key={q.id}
+                key={q.questionid}
                 questionIndex={currentQuestion}
                 question={q}
               />
 
+              {/* Answer Card (shown after submission) */}
               {showAnswerCard && <AnswerCard />}
+
+              {/* Hint Section - only show before answer is revealed */}
+              {!showAnswerCard && (
+                <div style={{ marginTop: '2rem' }}>
+                  <GptInput />
+                </div>
+              )}
+
+              {/* Optional: Progress indicator */}
+              <div style={{ 
+                marginTop: '2rem', 
+                textAlign: 'center', 
+                fontSize: '0.9rem', 
+                color: '#666' 
+              }}>
+                Question {currentQuestion} of {quiz.length}
               </div>
-            );
-          })()
-        )}
-      </div>
-    </>
+            </div>
+          );
+        })()
+      )}
+    </div>
   )
 }
 

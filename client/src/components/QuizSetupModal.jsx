@@ -5,14 +5,16 @@ import {useNavigate} from 'react-router-dom'
 
 function QuizSetupModal({ onClose }) {
   const [index, setIndex] = useState(0);
-  const { getTopics, topics, setCustomParameters } = useQuiz();
+  const { getTopics, topics, setCustomParameters, setQuizType } = useQuiz();
   const [checkedTopics, setCheckedTopics] = useState({});
   const [numQuestions, setNumQuestions] = useState(10);
   const [lowerDifficulty, setLowerDifficulty] = useState(1);
   const [upperDifficulty, setUpperDifficulty] = useState(5);
   const [useAdaptiveDifficulty, setUseAdaptiveDifficulty] = useState(true); 
-  const [quizType, setQuizType] = useState('custom'); // 'tailored' or 'custom'
+  // const [quizType, setQuizType] = useState('custom'); // 'tailored' or 'custom'
   const [quizMode, setQuizMode] = useState('');
+
+
 
   const navigate = useNavigate();
 
@@ -83,7 +85,7 @@ function QuizSetupModal({ onClose }) {
           <div className="quiz-setup-step">
             <p>Pick a category</p>
             <div className="button-group">
-              <button className="setup-btn" onClick={() => {setIndex(1); setQuizType('tailored');}}>Tailored</button>
+              <button className="setup-btn" onClick={() => {setIndex(1); setQuizType('adaptive'); navigate('/quiz');}}>Adaptive</button>
               <button className="setup-btn" onClick={() => {setIndex(2); getTopics(); setQuizType('custom'); }}>Custom</button>
             </div>
           </div>
@@ -92,8 +94,7 @@ function QuizSetupModal({ onClose }) {
         {/* Step 1: Tailored quiz */}
         {index === 1 && (
           <div className="quiz-setup-step">
-            <h3>Tailored Quiz</h3>
-            <p>Coming soon...</p>
+            {navigate('/quiz')}
             <button onClick={() => setIndex(0)}>Back</button>
           </div>
         )}
@@ -143,7 +144,8 @@ function QuizSetupModal({ onClose }) {
             <div className="button-group">
               <button className="back-btn" onClick={() => setIndex(2)}>Back</button>
               <button className="next-btn" onClick={() => {
-                setCustomParameters(quizType, quizMode, getSelectedTopics(), numQuestions, lowerDifficulty, upperDifficulty, useAdaptiveDifficulty);
+                setCustomParameters(quizMode, getSelectedTopics(), numQuestions, lowerDifficulty, upperDifficulty, useAdaptiveDifficulty);
+                setQuizType('custom');
                 navigate('/quiz');
               }}>
                 Start Quiz

@@ -19,7 +19,7 @@ DROP TABLE IF EXISTS users CASCADE;
 
 CREATE TABLE users (
   userid SERIAL PRIMARY KEY,
-  username VARCHAR(255) NOT NULL UNIQUE,
+  username VARCHAR(255),
   email VARCHAR(255) NOT NULL UNIQUE,
   password VARCHAR(255),
   is_verified BOOLEAN DEFAULT FALSE,
@@ -135,7 +135,7 @@ CREATE TABLE topics (
   parent_topic VARCHAR(50) REFERENCES topics(topic_code) ON DELETE SET NULL,
 
  -- Used for objective 2d: Likelihood to appear in exam
-  exam_weight DECIMAL(3,2) DEFAULT 1.0 -- total digits: 3, digits after decimal: 2
+  exam_weight DECIMAL(4,2) DEFAULT 1.0 -- total digits: 4, digits after decimal: 2
 );
 
 CREATE INDEX idx_topics_parent_topic ON topics(parent_topic);
@@ -158,7 +158,7 @@ CREATE TABLE questions (
   elo_rating DECIMAL(6,2) DEFAULT 1500.00 CHECK (elo_rating BETWEEN 800 AND 2400),
   
   -- Rating Deviation (uncertainty about difficulty). 350 = new question, <100 = well-calibrated
-  glicko_rd DECIMAL(6,2) DEFAULT 350.00 CHECK (glicko_rd BETWEEN 30 AND 350),
+  glicko_rd DECIMAL(6,2) DEFAULT 150.00 CHECK (glicko_rd BETWEEN 30 AND 350),
   
   -- Rating volatility (how much the rating fluctuates)
   glicko_volatility DECIMAL(4,3) DEFAULT 0.060,
@@ -207,6 +207,16 @@ CREATE TABLE question_topics (
 );
 
 CREATE INDEX idx_question_topics_topicid ON question_topics(topic_code);
+
+DELETE TABLE IF EXISTS user_hints CASCADE;
+CREATE TABLE user_hints (
+  hintid SERIAL PRIMARY KEY,
+  userid INTEGER REFERENCES users(userid) ON DELETE CASCADE,
+  questionid INTEGER REFERENCES questions(questionid) ON DELETE CASCADE,
+  hint_text TEXT NOT NULL,
+  helpful INTEGER, -- 1 = not helpful, 2 = didn't click yes or no, forgot 3 = helpful
+  created_at TIMESTAMP DEFAULT NOW()
+);
 
 
 -- =====================================================================================================================================================
@@ -322,7 +332,7 @@ CREATE TABLE user_topic_mastery (
   -- ELO/GLICKO-2 RATINGS (User ability per topic)
   -- Objective 2a: Difficulty calibrated to user's current ability
   elo_rating DECIMAL(6,2) DEFAULT 1500.00 CHECK (elo_rating BETWEEN 800 AND 2400),
-  glicko_rd DECIMAL(6,2) DEFAULT 350.00 CHECK (glicko_rd BETWEEN 30 AND 350),
+  glicko_rd DECIMAL(6,2) DEFAULT 150.00 CHECK (glicko_rd BETWEEN 30 AND 350),
   glicko_volatility DECIMAL(4,3) DEFAULT 0.060,
   
   -- FSRS-5 PARAMETERS (Spaced repetition scheduling)
@@ -830,11 +840,8 @@ END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
 
--- =====================================================================================
---                    CORRECTED TRIGGER WITH OBJECTIVE GLICKO-2
--- =====================================================================================
 
--- our smart trigger function that updates both user and question ratings and the FSRS schedule
+
 CREATE OR REPLACE FUNCTION update_ratings_and_schedule()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -859,6 +866,9 @@ DECLARE
   
   -- FSRS-5 weights (from research) - NOTE: PostgreSQL arrays are 1-indexed
   -- Mapping: w[0] -> c_fsrs_w[1], w[1] -> c_fsrs_w[2], etc.
+  -- 
+  -- IMPLEMENTATION NOTE: This is FSRS v4 with FSRS-4.5's decay constant (-0.5)
+
   c_fsrs_w CONSTANT DECIMAL[] := ARRAY[
     0.4072, 1.1829, 3.1262, 15.4722, -- w[0-3]: initial stability by rating
     7.2102, 0.5316, 1.0651, 0.0234,  -- w[4-7]: difficulty adjustments
@@ -866,7 +876,7 @@ DECLARE
     0.0726, 0.3025, 1.9661, 0.621,   -- w[12-15]: successful review parameters
     2.9469                            -- w[16]: hard penalty multiplier
   ];
-  c_fsrs_decay CONSTANT DECIMAL := -0.5;
+  c_fsrs_decay CONSTANT DECIMAL := -0.5;  -- FSRS-4.5 decay (flatter curve)
   
   -- FSRS retention target (configurable per user in future)
   -- 0.9 = 90% retention probability at next review
@@ -979,6 +989,9 @@ BEGIN
       v_new_phi DECIMAL(8,6);
       v_new_mu DECIMAL(8,6);
       v_new_sigma DOUBLE PRECISION;
+      
+      -- FSRS mean reversion variable
+      v_d0_3 DECIMAL(4,2);
     BEGIN
       -- Create user_topic_mastery if doesn't exist
       INSERT INTO user_topic_mastery (userid, topicid)
@@ -1057,7 +1070,7 @@ BEGIN
         NEW.user_rd_after := v_new_user_rd;
       END IF;
       
-      -- ========== FSRS-5 UPDATE ==========
+      -- ========== FSRS-4 UPDATE ==========
       
       NEW.fsrs_stability_before := v_fsrs_stability;
       NEW.fsrs_difficulty_before := v_fsrs_difficulty;
@@ -1068,17 +1081,25 @@ BEGIN
       IF v_fsrs_state = 'new' THEN
         -- Initial stability: w[0-3] -> c_fsrs_w[1-4]
         v_new_stability := c_fsrs_w[NEW.fsrs_rating];
+        
+        -- FIXED: Initial difficulty formula from FSRS v4
+        -- D₀(G) = w[4] - (G-3)·w[5]
+        -- w[4] is c_fsrs_w[5], w[5] is c_fsrs_w[6]
+        v_new_difficulty := c_fsrs_w[5] - (NEW.fsrs_rating - 3) * c_fsrs_w[6];
+        v_new_difficulty := GREATEST(1, LEAST(10, v_new_difficulty));
+        
         v_new_state := CASE WHEN NEW.fsrs_rating = 1 THEN 'learning' ELSE 'review' END;
-        v_new_difficulty := 5.0;
         
       ELSIF NEW.fsrs_rating = 1 THEN
         -- Failed review: calculate retrievability and reduce stability
         v_retrievability := POWER(1 + v_days_since_last_review / (9 * v_fsrs_stability), c_fsrs_decay);
         
-        -- FIXED: Subtraction must be OUTSIDE the multiplication
-        -- Formula: S' = w[7] × D^(-w[8]) × (S+1)^w[9] - 1
-        v_new_stability := c_fsrs_w[9] * POWER(v_fsrs_difficulty, -c_fsrs_w[10]) * 
-                          POWER(v_fsrs_stability + 1, c_fsrs_w[11]) - 1;
+        -- FIXED: Complete FSRS v4 failure formula
+        -- S'f(D,S,R) = w[11] · D^(-w[12]) · ((S+1)^w[13] - 1) · e^(w[14]·(1-R))
+        v_new_stability := c_fsrs_w[9] * 
+                          POWER(v_fsrs_difficulty, -c_fsrs_w[10]) * 
+                          (POWER(v_fsrs_stability + 1, c_fsrs_w[11]) - 1) *
+                          EXP(c_fsrs_w[12] * (1 - v_retrievability));
         
         -- SAFETY: Failed stability should NEVER exceed current stability
         -- Cap at 50% of previous stability when failing
@@ -1088,35 +1109,46 @@ BEGIN
         v_new_stability := GREATEST(v_new_stability, 0.1);
         
         v_new_state := 'relearning';
-        v_new_difficulty := LEAST(10, v_fsrs_difficulty - c_fsrs_w[8] * (NEW.fsrs_rating - 3));
+        
+        -- FIXED: Difficulty update with mean reversion
+        -- D' = D - w[6]·(G-3)  where G=1 for failures, so (G-3) = -2
+        -- Mean reversion: D'' = w[7]·D₀(3) + (1-w[7])·D'
+        v_d0_3 := c_fsrs_w[5];  -- D₀(3) = w[4] - (3-3)·w[5] = w[4]
+        v_new_difficulty := v_fsrs_difficulty - c_fsrs_w[7] * (NEW.fsrs_rating - 3);
+        v_new_difficulty := c_fsrs_w[8] * v_d0_3 + (1 - c_fsrs_w[8]) * v_new_difficulty;
+        v_new_difficulty := GREATEST(1, LEAST(10, v_new_difficulty));
         
       ELSE
         -- Successful review: exponential stability growth
         v_retrievability := POWER(1 + v_days_since_last_review / (9 * v_fsrs_stability), c_fsrs_decay);
         
-        -- DEBUG: Log values
-        RAISE NOTICE 'FSRS Growth Debug: days=%, stab=%, R=%, diff=%', 
-          v_days_since_last_review, v_fsrs_stability, v_retrievability, v_fsrs_difficulty;
-        
+        -- FIXED: FSRS v4 success formula with correct multipliers
+        -- S'r = S · (e^w[8] · (11-D) · S^(-w[9]) · (e^(w[10]·(1-R)) - 1) · w[15](if G=2) · w[16](if G=4) + 1)
         v_new_stability := v_fsrs_stability * (
           1 + 
-          EXP(c_fsrs_w[12]) * 
+          EXP(c_fsrs_w[9]) *                     -- w[8] -> c_fsrs_w[9]
           (11 - v_fsrs_difficulty) * 
-          POWER(v_fsrs_stability, -c_fsrs_w[13]) * 
-          (EXP((1 - v_retrievability) * c_fsrs_w[14]) - 1) *
-          CASE WHEN NEW.fsrs_rating = 2 THEN c_fsrs_w[17] ELSE 1 END
+          POWER(v_fsrs_stability, -c_fsrs_w[10]) *  -- w[9] -> c_fsrs_w[10]
+          (EXP((1 - v_retrievability) * c_fsrs_w[11]) - 1) *  -- w[10] -> c_fsrs_w[11]
+          CASE 
+            WHEN NEW.fsrs_rating = 2 THEN c_fsrs_w[16]  -- Hard: w[15] -> c_fsrs_w[16]
+            WHEN NEW.fsrs_rating = 4 THEN c_fsrs_w[17]  -- Easy: w[16] -> c_fsrs_w[17]
+            ELSE 1  -- Good: no multiplier
+          END
         );
-        
-        RAISE NOTICE 'FSRS Growth Debug: new_stab=%', v_new_stability;
         
         v_new_state := CASE 
           WHEN v_fsrs_state IN ('learning', 'relearning') AND NEW.fsrs_rating >= 3 THEN 'review'
           ELSE v_fsrs_state
         END;
         
-        v_new_difficulty := GREATEST(1, LEAST(10, 
-          v_fsrs_difficulty - c_fsrs_w[8] * (NEW.fsrs_rating - 3)
-        ));
+        -- FIXED: Difficulty update with mean reversion
+        -- D' = D - w[6]·(G-3)
+        -- Mean reversion: D'' = w[7]·D₀(3) + (1-w[7])·D'
+        v_d0_3 := c_fsrs_w[5];  -- D₀(3) = w[4]
+        v_new_difficulty := v_fsrs_difficulty - c_fsrs_w[7] * (NEW.fsrs_rating - 3);
+        v_new_difficulty := c_fsrs_w[8] * v_d0_3 + (1 - c_fsrs_w[8]) * v_new_difficulty;
+        v_new_difficulty := GREATEST(1, LEAST(10, v_new_difficulty));
       END IF;
       
       -- FSRS-5 stability is ALREADY "days until 90% retention"
@@ -1182,29 +1214,51 @@ BEGIN
   
   -- ========== Update question stats (SKIP if anchor!) ==========
   IF NOT v_question_is_anchor THEN
-    -- Use AVERAGE of Elo changes across all topics
-    v_elo_change := v_total_elo_change / GREATEST(v_topic_count, 1);
-    v_new_question_elo := GREATEST(800, LEAST(2400, v_question_elo - v_elo_change * 0.5));
-    v_new_question_rd := GREATEST(30, v_question_rd - 2);
-    
-    UPDATE questions SET
-      elo_rating = v_new_question_elo,
-      glicko_rd = v_new_question_rd,
-      glicko_volatility = GREATEST(0.03, v_question_volatility * 0.99),
-      attempts_count = attempts_count + 1,
-      correct_count = correct_count + (CASE WHEN NEW.is_correct THEN 1 ELSE 0 END),
+    DECLARE
+      v_current_attempts INTEGER;
+    BEGIN
+      -- Get current attempt count BEFORE incrementing
+      SELECT attempts_count INTO v_current_attempts
+      FROM questions
+      WHERE questionid = NEW.questionid;
       
-      -- Update average time (running average)
-      avg_time_seconds = ROUND(
-        (COALESCE(avg_time_seconds, 0) * attempts_count + COALESCE(NEW.time_taken, 0))
-        / (attempts_count + 1)
-      ),
+      -- Use AVERAGE of Elo changes across all topics
+      v_elo_change := v_total_elo_change / GREATEST(v_topic_count, 1);
+      v_new_question_elo := GREATEST(800, LEAST(2400, v_question_elo - v_elo_change * 0.5));
       
-      updated_at = v_now
-    WHERE questionid = NEW.questionid;
-    
-    NEW.question_elo_after := v_new_question_elo;
-    NEW.question_rd_after := v_new_question_rd;
+      -- FAST CONVERGENCE: 
+      -- First attempt: -20% (huge drop)
+      -- Gradually decreases to -2% minimum (fine-tuning)
+      -- Formula: decay = max(2%, 20% × e^(-0.3 × attempts))
+      v_new_question_rd := GREATEST(
+        30,
+        v_question_rd * (
+          1 - GREATEST(
+            0.02,  -- Floor at 2% decay (prevents getting stuck)
+            0.20 * EXP(-0.3 * v_current_attempts)  -- Exponential decay from 20%
+          )
+        )
+      );
+      
+      UPDATE questions SET
+        elo_rating = v_new_question_elo,
+        glicko_rd = v_new_question_rd,
+        glicko_volatility = GREATEST(0.03, v_question_volatility * 0.99),
+        attempts_count = attempts_count + 1,
+        correct_count = correct_count + (CASE WHEN NEW.is_correct THEN 1 ELSE 0 END),
+        
+        -- Update average time (running average)
+        avg_time_seconds = ROUND(
+          (COALESCE(avg_time_seconds, 0) * attempts_count + COALESCE(NEW.time_taken, 0))
+          / (attempts_count + 1)
+        ),
+        
+        updated_at = v_now
+      WHERE questionid = NEW.questionid;
+      
+      NEW.question_elo_after := v_new_question_elo;
+      NEW.question_rd_after := v_new_question_rd;
+    END;
   ELSE
     -- Anchor: no Elo change
     NEW.question_elo_after := v_question_elo;
@@ -1375,3 +1429,129 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Run test with: SELECT * FROM test_glicko2_example();
+
+
+-- =====================================================================================
+-- MASTERY COMPONENT
+-- =====================================================================================
+-- Adds 3 columns to track relative topic weakness
+-- Auto-updates via trigger when Elo changes
+
+-- =====================================================================================
+-- STEP 1: Add columns (one-time migration)
+-- =====================================================================================
+
+ALTER TABLE user_topic_mastery
+ADD COLUMN IF NOT EXISTS mastery_gap DECIMAL(6,2),
+ADD COLUMN IF NOT EXISTS mastery_z_score DECIMAL(4,2),
+ADD COLUMN IF NOT EXISTS mastery_category VARCHAR(20);
+
+
+-- =====================================================================================
+-- STEP 2: Auto-update trigger (runs after every question attempt)
+-- =====================================================================================
+
+CREATE OR REPLACE FUNCTION trigger_update_mastery_after_attempt()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- Recalculate mastery for this user only
+  WITH user_baseline AS (
+    SELECT 
+      userid,
+      AVG(elo_rating) AS avg_elo,
+      STDDEV(elo_rating) AS elo_stddev
+    FROM user_topic_mastery
+    WHERE userid = NEW.userid
+      AND fsrs_state != 'new'
+      AND elo_rating IS NOT NULL
+    GROUP BY userid
+    HAVING COUNT(*) >= 2  -- Need at least 2 topics
+  )
+  UPDATE user_topic_mastery utm
+  SET 
+    mastery_gap = utm.elo_rating - ub.avg_elo,
+    mastery_z_score = 
+      CASE 
+        WHEN ub.elo_stddev > 0 THEN 
+          ROUND(((utm.elo_rating - ub.avg_elo) / ub.elo_stddev)::numeric, 2)
+        ELSE 0
+      END,
+    mastery_category = 
+      CASE 
+        WHEN ub.elo_stddev = 0 THEN 'Competent'
+        WHEN (utm.elo_rating - ub.avg_elo) / ub.elo_stddev < -1.5 THEN 'Struggling'
+        WHEN (utm.elo_rating - ub.avg_elo) / ub.elo_stddev < -0.5 THEN 'Developing'
+        WHEN (utm.elo_rating - ub.avg_elo) / ub.elo_stddev < 0.5 THEN 'Competent'
+        WHEN (utm.elo_rating - ub.avg_elo) / ub.elo_stddev < 1.5 THEN 'Proficient'
+        ELSE 'Mastered'
+      END
+  FROM user_baseline ub
+  WHERE utm.userid = NEW.userid
+    AND utm.fsrs_state != 'new';
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Apply trigger
+DROP TRIGGER IF EXISTS trigger_update_mastery ON user_topic_mastery;
+CREATE TRIGGER trigger_update_mastery
+AFTER UPDATE OF elo_rating ON user_topic_mastery
+FOR EACH ROW
+EXECUTE FUNCTION trigger_update_mastery_after_attempt();
+
+
+-- =====================================================================================
+-- STEP 3: Initialize for existing users (run once)
+-- =====================================================================================
+
+DO $$
+DECLARE
+  v_user RECORD;
+BEGIN
+  FOR v_user IN (SELECT DISTINCT userid FROM user_topic_mastery)
+  LOOP
+    WITH user_baseline AS (
+      SELECT 
+        AVG(elo_rating) AS avg_elo,
+        STDDEV(elo_rating) AS elo_stddev
+      FROM user_topic_mastery
+      WHERE userid = v_user.userid
+        AND fsrs_state != 'new'
+      HAVING COUNT(*) >= 2
+    )
+    UPDATE user_topic_mastery utm
+    SET 
+      mastery_gap = utm.elo_rating - ub.avg_elo,
+      mastery_z_score = 
+        CASE 
+          WHEN ub.elo_stddev > 0 THEN 
+            ROUND(((utm.elo_rating - ub.avg_elo) / ub.elo_stddev)::numeric, 2)
+          ELSE 0
+        END,
+      mastery_category = 
+        CASE 
+          WHEN ub.elo_stddev = 0 THEN 'Competent'
+          WHEN (utm.elo_rating - ub.avg_elo) / ub.elo_stddev < -1.5 THEN 'Struggling'
+          WHEN (utm.elo_rating - ub.avg_elo) / ub.elo_stddev < -0.5 THEN 'Developing'
+          WHEN (utm.elo_rating - ub.avg_elo) / ub.elo_stddev < 0.5 THEN 'Competent'
+          WHEN (utm.elo_rating - ub.avg_elo) / ub.elo_stddev < 1.5 THEN 'Proficient'
+          ELSE 'Mastered'
+        END
+    FROM user_baseline ub
+    WHERE utm.userid = v_user.userid
+      AND utm.fsrs_state != 'new';
+  END LOOP;
+END $$;
+
+-- Verify it worked
+SELECT 
+  COUNT(*) AS total_topics,
+  COUNT(mastery_gap) AS with_mastery,
+  COUNT(*) FILTER (WHERE mastery_category = 'Struggling') AS struggling,
+  COUNT(*) FILTER (WHERE mastery_category = 'Developing') AS developing,
+  COUNT(*) FILTER (WHERE mastery_category = 'Competent') AS competent,
+  COUNT(*) FILTER (WHERE mastery_category = 'Proficient') AS proficient,
+  COUNT(*) FILTER (WHERE mastery_category = 'Mastered') AS mastered
+FROM user_topic_mastery
+WHERE fsrs_state != 'new';

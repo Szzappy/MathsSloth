@@ -12,6 +12,7 @@ import Navbar from "./components/Navbar.jsx";
 import {AuthProvider} from './contexts/AuthContext.jsx';
 import { QuizProvider } from './contexts/QuizContext.jsx';
 import QuizCompleted from './pages/QuizCompleted.jsx';
+import Analytics from './pages/Analytics.jsx';
 
 
 // For things like the dashboard where only a specific user can access it
@@ -116,6 +117,17 @@ function App() {
                 <ProtectedRoute>
                   <Layout showNavbar={true}>
                     <Dashboard />
+                  </Layout>
+                </ProtectedRoute>
+              } 
+            />
+
+            <Route 
+              path="/analytics" 
+              element={
+                <ProtectedRoute>
+                  <Layout showNavbar={true}>
+                    <Analytics />
                   </Layout>
                 </ProtectedRoute>
               } 

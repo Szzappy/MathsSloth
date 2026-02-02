@@ -18,7 +18,7 @@ export const QuizProvider = ({ children }) => {
   const [individualTopicStats, setIndividualTopicStats] = useState([]);
 
   // custom quiz parameters
-  const [quizType, setQuizType] = useState('custom'); 
+  const [quizType, setQuizType] = useState(''); // change to adaptive if adaptive quiz
   const [quizMode, setQuizMode] = useState('');
   const [customTopics, setCustomTopics] = useState([]);
   const [numQuestions, setNumQuestions] = useState(10);
@@ -46,8 +46,7 @@ export const QuizProvider = ({ children }) => {
 
   }, []);*/
 
-  const setCustomParameters = (quizType, quizMode, topics, numQuestions, lowerDifficulty, upperDifficulty, usingAdaptiveDifficulty) => {
-    setQuizType(quizType);
+  const setCustomParameters = (quizMode, topics, numQuestions, lowerDifficulty, upperDifficulty, usingAdaptiveDifficulty) => {
     setQuizMode(quizMode);
     setCustomTopics(topics);
     setNumQuestions(numQuestions);
@@ -133,7 +132,9 @@ export const QuizProvider = ({ children }) => {
 
   const getQuizData = async () => {
     try {
-        const response = await fetch(`${API_URL}/quiz`, {
+        // change from /quiz to /quiz/custom or /quiz/adaptive based on quiz type
+        console.log("FETCHING QUIZ DATA WITH TYPE", quizType);
+        const response = await fetch(`${API_URL}/quiz/${quizType}`, {
           method: "POST",
           headers: {
             'Content-Type': 'application/json'
@@ -218,7 +219,7 @@ export const QuizProvider = ({ children }) => {
   };
 
   return (
-    <QuizContext.Provider value={{ quiz, quizid, currentQuestion, setCurrentQuestion, getQuizData, markScheme, nextQuestion, 
+    <QuizContext.Provider value={{ quiz, quizid, setQuizType, currentQuestion, setCurrentQuestion, getQuizData, markScheme, nextQuestion, 
                                   getAnswer, showAnswerCard, canSubmit, renderQuestionWithMaths, continueQuiz, getTopics, topics, setCustomParameters,
                                   getResults, overallResults, individualTopicStats, confidence, setConfidence }}>
       {children}

@@ -9,14 +9,15 @@ const router = express.Router();
 // =====================================================================================
 
 router.post("/adaptive", async (req, res) => {
-  const client = await pool.connect();  // Add transaction wrapper
+  console.log("Adaptive quiz generation requested");
+  const client = await pool.connect();
   
   try {
     const { userid, question_count = 10 } = req.body;
     
     console.log("Generating adaptive quiz for user:", userid);
 
-    await client.query("BEGIN");  // Start transaction
+    await client.query("BEGIN");
 
     // Create quiz record
     const quizResult = await client.query(`
@@ -27,43 +28,64 @@ router.post("/adaptive", async (req, res) => {
 
     const quizId = quizResult.rows[0].quizid;
 
-    // Two-stage adaptive selection with deduplication
+    // Adaptive selection with mastery-aware prioritization
     const questions = await client.query(`
-      -- STAGE 1: Get priority topics based on FSRS urgency × Glicko uncertainty × Exam weight
+      -- Get priority topics using 4-factor scoring
       WITH priority_topics AS (
         SELECT 
           utm.topicid,
           t.topic_code,
           t.topic_name,
           utm.elo_rating AS user_elo,
-          -- Priority = urgency × uncertainty × utility
+          
+          -- Component 1: FSRS urgency (memory fading)
+          CASE 
+            WHEN utm.next_review_date IS NULL THEN 0.5
+            WHEN utm.next_review_date > NOW() THEN 0.0
+            ELSE 
+              LEAST(1.0, POWER(
+                EXTRACT(EPOCH FROM (NOW() - utm.next_review_date))/86400 / GREATEST(utm.fsrs_stability, 0.1),
+                0.5
+              ))
+          END AS urgency,
+          
+          -- Component 2: Glicko uncertainty (calibration need)
+          SQRT(utm.glicko_rd / 350.0) AS uncertainty,
+          
+          -- Component 3: MASTERY need (relative weakness)
+          GREATEST(
+            0.5,
+            1.0 + (COALESCE(utm.mastery_gap, 0) / -200.0)
+          ) AS mastery_need,
+          
+          -- Component 4: Exam utility (importance)
+          t.exam_weight AS utility,
+          
+          -- Combined priority score (multiplicative)
           (
-            -- FSRS urgency component
             CASE 
               WHEN utm.next_review_date IS NULL THEN 0.5
-              WHEN utm.next_review_date > NOW() THEN 
-                1 - POWER(0.9, GREATEST(0, -EXTRACT(EPOCH FROM (NOW() - utm.next_review_date))/86400) / GREATEST(utm.fsrs_stability, 0.1))
+              WHEN utm.next_review_date > NOW() THEN 0.0
               ELSE 
-                1 - POWER(0.9, EXTRACT(EPOCH FROM (NOW() - utm.next_review_date))/86400 / GREATEST(utm.fsrs_stability, 0.1))
+                LEAST(1.0, POWER(
+                  EXTRACT(EPOCH FROM (NOW() - utm.next_review_date))/86400 / GREATEST(utm.fsrs_stability, 0.1),
+                  0.5
+                ))
             END
           ) * 
-          (
-            -- Glicko uncertainty component (square root to soften)
-            SQRT(utm.glicko_rd / 350.0)
-          ) *
-          (
-            -- Exam weight utility component
-            t.exam_weight
-          ) AS priority_score
+          SQRT(utm.glicko_rd / 350.0) *
+          GREATEST(0.5, 1.0 + (COALESCE(utm.mastery_gap, 0) / -200.0)) *
+          t.exam_weight AS priority_score
+          
         FROM user_topic_mastery utm
         JOIN topics t ON utm.topicid = t.topicid
         WHERE utm.userid = $1
           AND (utm.next_review_date IS NULL OR utm.next_review_date <= NOW() + INTERVAL '1 day')
         ORDER BY priority_score DESC
-        LIMIT 5  -- Top 5 priority topics
+        LIMIT 5
       ),
       
-      -- STAGE 2: For each topic, find questions with optimal difficulty
+      -- Find questions with optimal difficulty for priority topics
       suitable_questions AS (
         SELECT 
           q.questionid,
@@ -76,27 +98,25 @@ router.post("/adaptive", async (req, res) => {
           pt.topic_code,
           pt.topic_name,
           pt.priority_score,
-          -- Calculate expected success using Glicko-2 formula
+          pt.urgency,
+          pt.uncertainty,
+          pt.mastery_need,
+          pt.utility,
           1.0 / (1.0 + POWER(10, (q.elo_rating - pt.user_elo) / 400.0)) AS expected_success,
-          -- Distance from optimal (70% success)
           ABS(1.0 / (1.0 + POWER(10, (q.elo_rating - pt.user_elo) / 400.0)) - 0.70) AS difficulty_distance
         FROM priority_topics pt
         JOIN question_topics qt ON pt.topic_code = qt.topic_code
         JOIN questions q ON qt.questionid = q.questionid
         WHERE 
-          -- Only questions in optimal difficulty range (50-85% success probability)
           1.0 / (1.0 + POWER(10, (q.elo_rating - pt.user_elo) / 400.0)) BETWEEN 0.50 AND 0.85
-          -- Don't repeat recently attempted questions (last 7 days)
           AND q.questionid NOT IN (
             SELECT questionid FROM question_attempts 
             WHERE userid = $1 AND attempted_at > NOW() - INTERVAL '7 days'
           )
-          -- Don't use anchor questions in regular quizzes
           AND q.is_anchor = FALSE
       )
       
-      -- FIX #1: DEDUPLICATION - Questions can appear in multiple topics
-      -- Use DISTINCT ON to ensure each question appears only once
+      -- Deduplication
       SELECT DISTINCT ON (questionid)
         questionid,
         question_text,
@@ -107,37 +127,132 @@ router.post("/adaptive", async (req, res) => {
         total_marks,
         topic_code,
         topic_name,
-        ROUND(expected_success::numeric, 2) AS expected_success
+        ROUND(expected_success::numeric, 2) AS expected_success,
+        ROUND(urgency::numeric, 3) AS urgency,
+        ROUND(uncertainty::numeric, 3) AS uncertainty,
+        ROUND(mastery_need::numeric, 3) AS mastery_need,
+        ROUND(utility::numeric, 2) AS utility,
+        ROUND(priority_score::numeric, 4) AS priority_score
       FROM suitable_questions
       ORDER BY 
-        questionid,                 -- DISTINCT ON requires this first
-        priority_score DESC,        -- Then by priority
-        difficulty_distance ASC     -- Then by optimal difficulty
+        questionid,
+        priority_score DESC,
+        difficulty_distance ASC
       LIMIT $2
     `, [userid, question_count]);
 
-    // If not enough questions found, fall back to random selection
+    // Fallback if not enough questions
     if (questions.rows.length === 0) {
-      console.log("No suitable questions found, using fallback selection");
+      console.log("No suitable questions found, using intelligent fallback");
+      
       const fallbackQuestions = await client.query(`
-        SELECT q.questionid, q.question_text, q.image_url, q.question_format, 
-               q.correct_answer, q.difficulty, q.total_marks
-        FROM questions q
-        WHERE q.is_anchor = FALSE
-          AND q.questionid NOT IN (
-            SELECT questionid FROM question_attempts 
-            WHERE userid = $1 AND attempted_at > NOW() - INTERVAL '7 days'
-          )
-        ORDER BY RANDOM()
+        WITH user_topics AS (
+          -- Get topics user has studied, ordered by need
+          SELECT 
+            t.topic_code,
+            utm.elo_rating,
+            utm.fsrs_stability,
+            COALESCE(utm.mastery_gap, 0) AS mastery_gap,
+            -- Simple priority: favor struggling topics
+            CASE 
+              WHEN utm.mastery_gap < -50 THEN 3  -- Struggling
+              WHEN utm.mastery_gap < 0 THEN 2    -- Below average
+              ELSE 1                              -- Average or better
+            END AS topic_priority
+          FROM user_topic_mastery utm
+          JOIN topics t ON utm.topicid = t.topicid
+          WHERE utm.userid = $1
+            AND utm.fsrs_state != 'new'
+          ORDER BY topic_priority DESC, RANDOM()
+          LIMIT 5  -- Top 5 topics user needs help with
+        ),
+        available_questions AS (
+          -- Find questions from those topics
+          SELECT DISTINCT
+            q.questionid,
+            q.question_text,
+            q.image_url,
+            q.question_format,
+            q.correct_answer,
+            q.difficulty,
+            q.total_marks,
+            ut.topic_code,
+            ut.topic_priority,
+            -- Calculate expected success
+            1.0 / (1.0 + POWER(10, (q.elo_rating - ut.elo_rating) / 400.0)) AS expected_success
+          FROM questions q
+          JOIN question_topics qt ON q.questionid = qt.questionid
+          JOIN user_topics ut ON qt.topic_code = ut.topic_code
+          WHERE q.is_anchor = FALSE
+            -- Exclude recent attempts
+            AND q.questionid NOT IN (
+              SELECT questionid FROM question_attempts 
+              WHERE userid = $1 AND attempted_at > NOW() - INTERVAL '7 days'
+            )
+            -- Prefer questions in reasonable difficulty range
+            AND 1.0 / (1.0 + POWER(10, (q.elo_rating - ut.elo_rating) / 400.0)) BETWEEN 0.30 AND 0.90
+        )
+        SELECT DISTINCT ON (questionid)
+          questionid,
+          question_text,
+          image_url,
+          question_format,
+          correct_answer,
+          difficulty,
+          total_marks,
+          topic_code,
+          ROUND(expected_success::numeric, 2) AS expected_success
+        FROM available_questions
+        ORDER BY 
+          questionid,
+          topic_priority DESC,  -- Prioritize struggling topics
+          ABS(expected_success - 0.60) ASC,  -- Prefer ~60% success
+          RANDOM()
         LIMIT $2
       `, [userid, question_count]);
       
-      questions.rows = fallbackQuestions.rows;
+      // If STILL no questions (new user or all questions attempted), use true random
+      if (fallbackQuestions.rows.length === 0) {
+        console.log("User has no topic history, using random questions");
+        const randomQuestions = await client.query(`
+          SELECT 
+            q.questionid,
+            q.question_text,
+            q.image_url,
+            q.question_format,
+            q.correct_answer,
+            q.difficulty,
+            q.total_marks
+          FROM questions q
+          WHERE q.is_anchor = FALSE
+            AND q.questionid NOT IN (
+              SELECT questionid FROM question_attempts 
+              WHERE userid = $1 AND attempted_at > NOW() - INTERVAL '7 days'
+            )
+          ORDER BY RANDOM()
+          LIMIT $2
+        `, [userid, question_count]);
+        
+        questions.rows = randomQuestions.rows;
+      } else {
+        questions.rows = fallbackQuestions.rows;
+      }
     }
 
-    console.log("Adaptive questions selected:", questions.rows.length);
+    console.log(`Selected ${questions.rows.length} questions`);
+    
+    // Log priority breakdown (useful for debugging)
+    if (questions.rows.length > 0 && questions.rows[0].priority_score) {
+      console.log("Top question priority breakdown:");
+      console.log(`  Topic: ${questions.rows[0].topic_name}`);
+      console.log(`  Urgency: ${questions.rows[0].urgency}`);
+      console.log(`  Uncertainty: ${questions.rows[0].uncertainty}`);
+      console.log(`  Mastery need: ${questions.rows[0].mastery_need}`);
+      console.log(`  Utility: ${questions.rows[0].utility}`);
+      console.log(`  Total priority: ${questions.rows[0].priority_score}`);
+    }
 
-    // Insert questions into quiz_questions table
+    // Insert questions into quiz
     for (let i = 0; i < questions.rows.length; i++) {
       await client.query(`
         INSERT INTO quiz_questions (quizid, questionid, question_order)
@@ -145,7 +260,7 @@ router.post("/adaptive", async (req, res) => {
       `, [quizId, questions.rows[i].questionid, i + 1]);
     }
 
-    await client.query("COMMIT");  // Commit transaction
+    await client.query("COMMIT");
 
     res.status(200).json({ 
       questions: questions.rows, 
@@ -153,19 +268,19 @@ router.post("/adaptive", async (req, res) => {
       message: "Adaptive quiz generated successfully"
     });
   } catch (error) {
-    await client.query("ROLLBACK");  // Rollback on error
+    await client.query("ROLLBACK");
     console.error("Error generating adaptive quiz:", error);
     res.status(500).json({ error: "Failed to generate adaptive quiz" });
   } finally {
-    client.release();  // Always release client
+    client.release();
   }
 });
 
 // =====================================================================================
-//                           CUSTOM QUIZ GENERATION (CORRECTED)
+//                           CUSTOM QUIZ GENERATION
 // =====================================================================================
 
-router.post("/", async (req, res) => {
+router.post("/custom", async (req, res) => {
   const client = await pool.connect();  // Transaction wrapper
   
   try {
