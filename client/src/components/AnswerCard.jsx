@@ -1,4 +1,4 @@
-import React from 'react'
+import React from 'react';
 import { useQuiz } from '../contexts/QuizContext.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
 
@@ -8,52 +8,42 @@ function AnswerCard() {
   const { user, userid } = useAuth();
 
   const handleButtonClick = (item) => {
-    // give button green highlight on click, then remove if clicked again
     const button = document.getElementById(`button-${item.mark_scheme_item_id}`);
     button.classList.toggle('active');
-    // if is_mandatory step, change to purple, else green
-    button.style.backgroundColor = button.classList.contains('active') ? (item.is_mandatory ? 'purple' : 'lightgreen') : '';
-
-    // if button was just selected, check if any of the previous mandatory ones are not selected
-    // button.classList.contains('active') is true means it was just selected
+    
+    button.style.backgroundColor = button.classList.contains('active') 
+      ? (item.is_mandatory ? '#7c3aed' : '#10b981') 
+      : '';
+    button.style.borderColor = button.classList.contains('active')
+      ? (item.is_mandatory ? '#7c3aed' : '#10b981')
+      : '#404040';
+    
     if (button.classList.contains('active')) {
-      const mandatoryItems = markScheme.filter(msItem => msItem.is_mandatory && msItem.mark_scheme_item_id < item.mark_scheme_item_id); // get all previous mandatory items
-
-      // check if all previous mandatory items are selected
+      const mandatoryItems = markScheme.filter(msItem => 
+        msItem.is_mandatory && msItem.mark_scheme_item_id < item.mark_scheme_item_id
+      );
+      
       const allMandatorySelected = mandatoryItems.every(msItem => {
         const msButton = document.getElementById(`button-${msItem.mark_scheme_item_id}`);
         return msButton && msButton.classList.contains('active');
       });
+      
       if (!allMandatorySelected) {
         button.classList.remove('active');
         button.style.backgroundColor = '';
+        button.style.borderColor = '#404040';
       }
     }
-    console.log(`Clicked on mark scheme item: ${item.mark_scheme_item_id}`);
   };
 
-  // function when submitting answer
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
     const selectedItems = markScheme.filter(item => {
       const button = document.getElementById(`button-${item.mark_scheme_item_id}`);
       return button && button.classList.contains('active');
     });
-    console.log('Selected mark scheme items:', selectedItems);
-
-    // Things to send to backend
-    /* 
-    userid
-    questionid
-    quizid
-
-    marks_awarded
-    marks_available
-    confidence_level
-
-    question_difficulty
-    */
-
+    
     const response = await fetch(`${API_URL}/quiz/answer`, {
       method: "POST",
       headers: {
@@ -63,45 +53,151 @@ function AnswerCard() {
         userid: userid,
         questionid: quiz[currentQuestion - 1].questionid,
         quizid: quizid,
-        marks_awarded: selectedItems.reduce((acc) => acc + 1, 0), // add 1 for each selected item
+        marks_awarded: selectedItems.reduce((acc) => acc + 1, 0),
         marks_available: quiz[currentQuestion - 1].total_marks,
         confidence: confidence,
-        time_taken: 0, // to be implemented
+        time_taken: 0,
         question_difficulty: quiz[currentQuestion - 1].difficulty,
       }),
     });
-
+    
     if (response.ok) {
       const data = await response.json();
-      setConfidence(null); // reset confidence for next question
+      setConfidence(null);
       console.log("Response from server:", data);
     } else {
       console.error("Error submitting answer:", response.statusText);
     }
-
+    
     nextQuestion();
   };
 
   return (
-    <div>
-      <h1>Mark Scheme</h1>
+    <div style={{
+      backgroundColor: '#2d2d2d',
+      border: '1px solid #404040',
+      borderRadius: '12px',
+      padding: '32px',
+      marginBottom: '24px'
+    }}>
+      <h2 style={{
+        color: '#10b981',
+        fontSize: '24px',
+        fontWeight: 'bold',
+        marginTop: 0,
+        marginBottom: '24px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px'
+      }}>
+        ✓ Mark Scheme
+      </h2>
+
       {markScheme.length === 0 ? (
-        <p>Loading mark scheme...</p>
+        <div style={{
+          textAlign: 'center',
+          padding: '2rem',
+          color: '#9ca3af'
+        }}>
+          <p>Loading mark scheme...</p>
+        </div>
       ) : (
         <>
-          <ul>
+          <ul style={{
+            listStyle: 'none',
+            padding: 0,
+            margin: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px'
+          }}>
             {markScheme.map((item, index) => (
               <li key={item.mark_scheme_item_id || index}>
-                <button id={`button-${item.mark_scheme_item_id}`} onClick={() => handleButtonClick(item)}>
-                    <strong>Step {index + 1}:</strong> 
-                    {item.is_mandatory && <span style={{ color: 'red' }}> Mandatory </span>}
+                <button 
+                  id={`button-${item.mark_scheme_item_id}`}
+                  onClick={() => handleButtonClick(item)}
+                  style={{
+                    width: '100%',
+                    padding: '16px 20px',
+                    backgroundColor: '#1a1a1a',
+                    border: '2px solid #404040',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'all 0.2s',
+                    color: '#d1d5db',
+                    fontSize: '14px',
+                    lineHeight: '1.6'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!e.currentTarget.classList.contains('active')) {
+                      e.currentTarget.style.borderColor = '#10b981';
+                      e.currentTarget.style.backgroundColor = '#262626';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!e.currentTarget.classList.contains('active')) {
+                      e.currentTarget.style.borderColor = '#404040';
+                      e.currentTarget.style.backgroundColor = '#1a1a1a';
+                    }
+                  }}
+                >
+                  <div style={{ marginBottom: '8px' }}>
+                    <strong style={{ color: '#10b981' }}>Step {index + 1}:</strong>
+                    {item.is_mandatory && (
+                      <span style={{ 
+                        color: '#a855f7',
+                        marginLeft: '8px',
+                        fontWeight: '600'
+                      }}>
+                        🔒 Mandatory
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ color: '#d1d5db' }}>
                     {renderQuestionWithMaths(item.item_description)}
-                   <em> ({item.marks_available} {item.marks_available === 1 ? 'mark' : 'marks'})</em>
+                  </div>
+                  <div style={{ 
+                    marginTop: '8px',
+                    color: '#9ca3af',
+                    fontSize: '12px'
+                  }}>
+                    <em>({item.marks_available} {item.marks_available === 1 ? 'mark' : 'marks'})</em>
+                  </div>
                 </button>
               </li>
             ))}
           </ul>
-          <button onClick={handleSubmit}>Next Question</button>
+
+          <button 
+            onClick={handleSubmit}
+            style={{
+              width: '100%',
+              marginTop: '24px',
+              padding: '16px 24px',
+              backgroundColor: '#10b981',
+              color: '#fff',
+              fontSize: '16px',
+              fontWeight: '600',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              boxShadow: '0 4px 6px rgba(16, 185, 129, 0.3)'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = '#059669';
+              e.target.style.transform = 'translateY(-2px)';
+              e.target.style.boxShadow = '0 6px 12px rgba(16, 185, 129, 0.4)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = '#10b981';
+              e.target.style.transform = 'translateY(0)';
+              e.target.style.boxShadow = '0 4px 6px rgba(16, 185, 129, 0.3)';
+            }}
+          >
+            → Next Question
+          </button>
         </>
       )}
     </div>

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 
 function StreakCard({ userid }) {
@@ -28,8 +29,8 @@ function StreakCard({ userid }) {
 
   return (
     <div style={{
-      backgroundColor: '#1a1a1a',
-      border: '1px solid #333',
+      backgroundColor: '#2d2d2d',
+      border: '1px solid #404040',
       borderRadius: '12px',
       padding: '20px',
       transition: 'transform 0.2s, box-shadow 0.2s',
@@ -50,7 +51,7 @@ function StreakCard({ userid }) {
         marginBottom: '12px'
       }}>
         <p style={{ 
-          color: '#888', 
+          color: '#9ca3af', 
           fontSize: '14px',
           margin: 0,
           fontWeight: '500'
@@ -70,13 +71,13 @@ function StreakCard({ userid }) {
           <div style={{
             width: '60px',
             height: '16px',
-            backgroundColor: '#333',
+            backgroundColor: '#404040',
             borderRadius: '4px'
           }} />
           <div style={{
             width: '80px',
             height: '12px',
-            backgroundColor: '#333',
+            backgroundColor: '#404040',
             borderRadius: '4px'
           }} />
         </div>

@@ -9,13 +9,12 @@ function GptInput() {
   const [hintId, setHintId] = useState(null);
   const [previousHints, setPreviousHints] = useState([]);
   
-  const { quiz, currentQuestion, renderQuestionWithMaths } = useQuiz(); // ✅ Added renderQuestionWithMaths
+  const { quiz, currentQuestion, renderQuestionWithMaths } = useQuiz();
   const { userid } = useAuth();
   const API_URL = import.meta.env.VITE_API_URL;
 
   const currentQ = quiz[currentQuestion - 1];
 
-  // ✅ Reset hints when question changes
   useEffect(() => {
     setPreviousHints([]);
     setStudentAttempt("");
@@ -66,11 +65,10 @@ function GptInput() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           hintId: hintId,
-          helpful: helpful // 1 = not helpful, 3 = helpful
+          helpful: helpful
         })
       });
       
-      // Clear current hint after rating
       setHint("");
       setHintId(null);
     } catch (error) {
@@ -83,9 +81,29 @@ function GptInput() {
   }
 
   return (
-    <div style={{ maxWidth: 600, margin: "2rem auto", padding: "1rem", border: "1px solid #ddd", borderRadius: "8px" }}>
-      <h2>🦥 Need a hint?</h2>
-      <p style={{ fontSize: "0.9rem", color: "#666" }}>
+    <div style={{
+      backgroundColor: '#2d2d2d',
+      border: '1px solid #404040',
+      borderRadius: '12px',
+      padding: '24px'
+    }}>
+      <h3 style={{
+        color: '#10b981',
+        fontSize: '20px',
+        fontWeight: '600',
+        marginTop: 0,
+        marginBottom: '12px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px'
+      }}>
+        🦥 Need a hint?
+      </h3>
+      <p style={{ 
+        fontSize: '14px', 
+        color: '#9ca3af',
+        marginBottom: '20px'
+      }}>
         Stuck on this question? Tell Slothrates what you've tried and get a helpful hint!
       </p>
       
@@ -95,13 +113,21 @@ function GptInput() {
           onChange={(e) => setStudentAttempt(e.target.value)}
           placeholder="What have you tried so far? (optional - helps us give better hints!)"
           style={{ 
-            width: "100%", 
-            padding: "0.75rem",
-            minHeight: "80px",
-            marginBottom: "1rem",
-            borderRadius: "4px",
-            border: "1px solid #ccc"
+            width: '100%', 
+            padding: '12px',
+            minHeight: '100px',
+            marginBottom: '16px',
+            borderRadius: '8px',
+            border: '1px solid #404040',
+            backgroundColor: '#1a1a1a',
+            color: '#d1d5db',
+            fontSize: '14px',
+            fontFamily: 'inherit',
+            resize: 'vertical',
+            outline: 'none'
           }}
+          onFocus={(e) => e.target.style.borderColor = '#10b981'}
+          onBlur={(e) => e.target.style.borderColor = '#404040'}
         />
         
         <button 
@@ -109,47 +135,85 @@ function GptInput() {
           disabled={loading}
           style={{
             width: "100%",
-            padding: "0.75rem 1rem",
-            backgroundColor: loading ? "#ccc" : "#4CAF50",
-            color: "white",
+            padding: "12px 20px",
+            backgroundColor: loading ? '#404040' : '#3b82f6',
+            color: loading ? '#9ca3af' : '#fff',
             border: "none",
-            borderRadius: "4px",
+            borderRadius: "8px",
             cursor: loading ? "not-allowed" : "pointer",
-            fontSize: "1rem",
-            fontWeight: "bold"
+            fontSize: "14px",
+            fontWeight: "600",
+            transition: 'all 0.2s'
+          }}
+          onMouseEnter={(e) => {
+            if (!loading) {
+              e.target.style.backgroundColor = '#2563eb';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!loading) {
+              e.target.style.backgroundColor = '#3b82f6';
+            }
           }}
         >
-          {loading ? "Getting hint..." : previousHints.length > 0 ? "Get another hint" : "Get a hint"}
+          {loading ? "Getting hint..." : previousHints.length > 0 ? "Get another hint" : "💡 Get a hint"}
         </button>
       </form>
 
       {hint && (
         <div style={{ 
-          marginTop: "1.5rem", 
-          padding: "1rem", 
-          backgroundColor: "#f0f8ff",
-          borderRadius: "8px",
-          border: "1px solid #b3d9ff"
+          marginTop: '20px', 
+          padding: '16px', 
+          backgroundColor: '#1a1a1a',
+          borderRadius: '8px',
+          border: '1px solid #10b981'
         }}>
-          <h3 style={{ marginTop: 0, color: "#0066cc" }}>💡 Hint:</h3>
-          <p style={{ fontSize: "1rem", lineHeight: "1.6" }}>
-            {renderQuestionWithMaths(hint)} {/* ✅ Render with LaTeX support */}
-          </p>
+          <h4 style={{ 
+            marginTop: 0, 
+            color: '#10b981',
+            fontSize: '16px',
+            fontWeight: '600',
+            marginBottom: '12px'
+          }}>
+            💡 Hint:
+          </h4>
+          <div style={{ 
+            fontSize: '14px', 
+            lineHeight: '1.6',
+            color: '#d1d5db'
+          }}>
+            {renderQuestionWithMaths(hint)}
+          </div>
           
-          <div style={{ marginTop: "1rem", borderTop: "1px solid #ccc", paddingTop: "1rem" }}>
-            <p style={{ fontSize: "0.9rem", marginBottom: "0.5rem" }}>Was this hint helpful?</p>
-            <div style={{ display: "flex", gap: "0.5rem" }}>
+          <div style={{ 
+            marginTop: '16px', 
+            borderTop: '1px solid #404040', 
+            paddingTop: '16px' 
+          }}>
+            <p style={{ 
+              fontSize: '13px', 
+              marginBottom: '12px',
+              color: '#9ca3af'
+            }}>
+              Was this hint helpful?
+            </p>
+            <div style={{ display: 'flex', gap: '12px' }}>
               <button 
                 onClick={() => handleRating(3)}
                 style={{
                   flex: 1,
-                  padding: "0.5rem",
-                  backgroundColor: "#4CAF50",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer"
+                  padding: '10px',
+                  backgroundColor: '#10b981',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  transition: 'all 0.2s'
                 }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = '#059669'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = '#10b981'}
               >
                 👍 Yes
               </button>
@@ -157,13 +221,18 @@ function GptInput() {
                 onClick={() => handleRating(1)}
                 style={{
                   flex: 1,
-                  padding: "0.5rem",
-                  backgroundColor: "#f44336",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer"
+                  padding: '10px',
+                  backgroundColor: '#ef4444',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  transition: 'all 0.2s'
                 }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = '#dc2626'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = '#ef4444'}
               >
                 👎 No
               </button>
@@ -174,10 +243,10 @@ function GptInput() {
 
       {previousHints.length > 0 && (
         <p style={{ 
-          marginTop: "1rem", 
-          fontSize: "0.85rem", 
-          color: "#666",
-          textAlign: "center"
+          marginTop: '16px', 
+          fontSize: '13px', 
+          color: '#9ca3af',
+          textAlign: 'center'
         }}>
           Hints received: {previousHints.length}
         </p>

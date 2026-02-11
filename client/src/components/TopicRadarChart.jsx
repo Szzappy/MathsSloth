@@ -4,10 +4,10 @@ import { scaleLinear } from '@visx/scale';
 import { Point } from '@visx/point';
 import { Line } from '@visx/shape';
 
-const blue = '#3b82f6';
-const darkBlue = '#1e40af';
-const silver = '#444';
-const background = '#0a0a0a';
+const green = '#10b981';
+const darkGreen = '#059669';
+const silver = '#404040';
+const background = '#2d2d2d';
 
 function TopicRadarChart({ userid, width = 600, height = 600, levels = 5 }) {
   const API_URL = import.meta.env.VITE_API_URL;
@@ -20,7 +20,6 @@ function TopicRadarChart({ userid, width = 600, height = 600, levels = 5 }) {
         const response = await fetch(`${API_URL}/analytics/topic-elos/${userid}`);
         const data = await response.json();
         
-        // Group by parent topic and calculate averages
         const parentTopics = {};
         
         data.forEach(topic => {
@@ -34,13 +33,11 @@ function TopicRadarChart({ userid, width = 600, height = 600, levels = 5 }) {
             };
           }
           
-          // Convert string to number
           if (topic.elo_rating) {
             parentTopics[parentKey].elo_ratings.push(parseFloat(topic.elo_rating));
           }
         });
         
-        // Calculate averages and create final data
         const processedTopics = Object.values(parentTopics)
           .map(parent => ({
             ...parent,
@@ -67,15 +64,15 @@ function TopicRadarChart({ userid, width = 600, height = 600, levels = 5 }) {
   if (loading) {
     return (
       <div style={{
-        backgroundColor: '#1a1a1a',
-        border: '1px solid #333',
+        backgroundColor: '#2d2d2d',
+        border: '1px solid #404040',
         borderRadius: '12px',
         padding: '24px',
         height: '600px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: '#888'
+        color: '#9ca3af'
       }}>
         Loading radar chart...
       </div>
@@ -85,15 +82,15 @@ function TopicRadarChart({ userid, width = 600, height = 600, levels = 5 }) {
   if (topicData.length === 0) {
     return (
       <div style={{
-        backgroundColor: '#1a1a1a',
-        border: '1px solid #333',
+        backgroundColor: '#2d2d2d',
+        border: '1px solid #404040',
         borderRadius: '12px',
         padding: '24px',
         height: '600px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: '#888'
+        color: '#9ca3af'
       }}>
         No topic data available
       </div>
@@ -105,27 +102,22 @@ function TopicRadarChart({ userid, width = 600, height = 600, levels = 5 }) {
   const yMax = height - margin.top - margin.bottom;
   const radius = Math.min(xMax, yMax) / 2;
 
-  // Get ELO values
   const getElo = d => d.elo_rating;
 
-  // Calculate min/max with proper padding
   const allElos = topicData.map(getElo);
   const minElo = Math.min(...allElos);
   const maxElo = Math.max(...allElos);
   const eloRange = maxElo - minElo;
   
-  // Add 20% padding on both sides, minimum 100 points
   const padding = Math.max(eloRange * 0.2, 100);
   const domainMin = minElo - padding;
   const domainMax = maxElo + padding;
 
-  // Scales
   const yScale = scaleLinear({
     range: [0, radius],
     domain: [domainMin, domainMax],
   });
 
-  // Generate points for axes
   const genPoints = (length, radius) => {
     const step = (Math.PI * 2) / length;
     return [...new Array(length)].map((_, i) => ({
@@ -134,7 +126,6 @@ function TopicRadarChart({ userid, width = 600, height = 600, levels = 5 }) {
     }));
   };
 
-  // Generate polygon points for data
   const genPolygonPoints = (dataArray, scale, getValue) => {
     const step = (Math.PI * 2) / dataArray.length;
     const points = [];
@@ -158,8 +149,8 @@ function TopicRadarChart({ userid, width = 600, height = 600, levels = 5 }) {
 
   return (
     <div style={{
-      backgroundColor: '#1a1a1a',
-      border: '1px solid #333',
+      backgroundColor: '#2d2d2d',
+      border: '1px solid #404040',
       borderRadius: '12px',
       padding: '24px'
     }}>
@@ -176,14 +167,12 @@ function TopicRadarChart({ userid, width = 600, height = 600, levels = 5 }) {
       <svg width={width} height={height}>
         <rect fill={background} width={width} height={height} rx={8} />
         <Group top={height / 2} left={width / 2}>
-          {/* Concentric circles (web levels) - FIXED */}
           {[...new Array(levels)].map((_, i) => {
             const levelRadius = ((i + 1) * radius) / levels;
             const levelValue = yScale.invert(levelRadius);
             
             return (
               <g key={`web-${i}`}>
-                {/* Circle */}
                 <circle
                   r={levelRadius}
                   fill="none"
@@ -192,7 +181,6 @@ function TopicRadarChart({ userid, width = 600, height = 600, levels = 5 }) {
                   strokeOpacity={0.5}
                   strokeDasharray="4,4"
                 />
-                {/* Level label */}
                 <text
                   x={5}
                   y={-levelRadius + 5}
@@ -206,7 +194,6 @@ function TopicRadarChart({ userid, width = 600, height = 600, levels = 5 }) {
             );
           })}
           
-          {/* Axis lines */}
           {[...new Array(topicData.length)].map((_, i) => (
             <Line 
               key={`radar-line-${i}`} 
@@ -217,24 +204,22 @@ function TopicRadarChart({ userid, width = 600, height = 600, levels = 5 }) {
             />
           ))}
           
-          {/* Data polygon */}
           <polygon
             points={polygonPoints.pointString}
-            fill={blue}
+            fill={green}
             fillOpacity={0.2}
-            stroke={blue}
+            stroke={green}
             strokeWidth={2}
           />
           
-          {/* Data points */}
           {polygonPoints.points.map((point, i) => (
             <g key={`radar-point-${i}`}>
               <circle 
                 cx={point.x} 
                 cy={point.y} 
                 r={4} 
-                fill={blue}
-                stroke={darkBlue}
+                fill={green}
+                stroke={darkGreen}
                 strokeWidth={2}
               />
               <title>
@@ -243,7 +228,6 @@ function TopicRadarChart({ userid, width = 600, height = 600, levels = 5 }) {
             </g>
           ))}
           
-          {/* Labels */}
           {topicData.map((topic, i) => {
             const angle = (Math.PI * 2 / topicData.length) * i;
             const labelRadius = radius + 40;
@@ -260,7 +244,7 @@ function TopicRadarChart({ userid, width = 600, height = 600, levels = 5 }) {
                 x={x}
                 y={y}
                 fontSize={11}
-                fill="#ddd"
+                fill="#d1d5db"
                 textAnchor={x > 5 ? 'start' : x < -5 ? 'end' : 'middle'}
                 dominantBaseline="middle"
               >
@@ -274,7 +258,7 @@ function TopicRadarChart({ userid, width = 600, height = 600, levels = 5 }) {
       <div style={{ 
         marginTop: '16px', 
         textAlign: 'center',
-        color: '#888',
+        color: '#9ca3af',
         fontSize: '12px'
       }}>
         Hover over points to see ELO ratings • Showing {topicData.length} topic areas

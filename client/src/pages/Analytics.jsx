@@ -47,86 +47,98 @@ function Analytics() {
   }, [userid, API_URL]);
 
   return (
-    <div className="analytics-container" style={{ 
-      padding: '24px',
-      maxWidth: '1600px',
-      margin: '0 auto',
-      backgroundColor: '#0a0a0a',
-      minHeight: '100vh'
+    <div style={{ 
+      minHeight: '100vh',
+      backgroundColor: '#1a1a1a',
+      padding: '24px'
     }}>
-      {/* Header */}
-      <div style={{ marginBottom: '32px' }}>
-        <h1 style={{ 
-          fontSize: '32px', 
-          fontWeight: 'bold', 
-          color: '#fff',
-          marginBottom: '8px'
-        }}>
-          Analytics Dashboard
-        </h1>
-        <p style={{ color: '#888', fontSize: '14px' }}>
-          Track your learning progress and performance metrics
-        </p>
-      </div>
-
-      {/* Top Stats Row */}
       <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-        gap: '16px',
-        marginBottom: '24px'
+        maxWidth: '1600px',
+        margin: '0 auto'
       }}>
-        <StatsCard 
-          title="Questions Answered"
-          value={questionsAnswered}
-          loading={loading}
-          icon="📝"
-        />
-        <StatsCard 
-          title="Predicted Grade"
-          value={predictedGrade !== null ? Math.round(predictedGrade) : null}
-          loading={loading}
-          suffix=" ELO"
-          icon="🎯"
-        />
-        <StreakCard userid={userid} />
-        <LearningVelocityCard userid={userid} />
-      </div>
-
-      {/* Main Content Grid */}
-      <div style={{ 
-        display: 'grid',
-        gridTemplateColumns: '1fr',
-        gap: '24px'
-      }}>
-        {/* Topic ELO and Grade */}
-        <TopicEloAndGradeCard userid={userid} user={user} />
-        
-        {/* Two Column Layout for Heatmap and Confidence */}
-        <div style={{ 
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-          gap: '24px'
-        }}>
-          {/* Activity Heatmap */}
-          <UserActivityHeatmap userid={userid} user={user} />
-          
-          {/* Confidence Levels */}
-          <ConfidenceLevelsCard userid={userid} user={user} />
+        {/* Header */}
+        <div style={{ marginBottom: '32px' }}>
+          <h1 style={{ 
+            fontSize: '32px', 
+            fontWeight: 'bold', 
+            color: '#fff',
+            marginBottom: '8px',
+            margin: 0
+          }}>
+            📊 Analytics Dashboard
+          </h1>
+          <p style={{ 
+            color: '#9ca3af', 
+            fontSize: '14px',
+            margin: 0,
+            marginTop: '8px'
+          }}>
+            Track your learning progress and performance metrics
+          </p>
         </div>
 
-        {/* Two Column Layout for Charts */}
+        {/* Top Stats Row */}
         <div style={{ 
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(500px, 1fr))',
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+          gap: '20px',
+          marginBottom: '24px'
+        }}>
+          <StatsCard 
+            title="Questions Answered"
+            value={questionsAnswered}
+            loading={loading}
+            icon="📝"
+          />
+          <StatsCard 
+            title="Predicted Grade"
+            value={predictedGrade !== null ? Math.round(predictedGrade) : null}
+            loading={loading}
+            suffix=" ELO"
+            icon="🎯"
+          />
+          <StreakCard userid={userid} />
+          <LearningVelocityCard userid={userid} />
+        </div>
+
+        {/* Main Content Grid */}
+        <div style={{ 
+          display: 'flex',
+          flexDirection: 'column',
           gap: '24px'
         }}>
-          {/* Topic Radar Chart */}
-          <TopicRadarChart userid={userid} />
+          {/* Topic ELO and Grade - Full Width */}
+          <TopicEloAndGradeCard userid={userid} user={user} />
           
-          {/* Grade Progress Over Time */}
-          <GradeProgressChart userid={userid} />
+          {/* Charts Row - Side by Side */}
+          <div style={{ 
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(550px, 1fr))',
+            gap: '24px'
+          }}>
+            {/* Grade Progress Over Time */}
+            <GradeProgressChart userid={userid} />
+            
+            {/* Topic Radar Chart */}
+            <TopicRadarChart userid={userid} />
+          </div>
+
+          {/* Heatmap and Confidence Row - Side by Side */}
+          <div style={{ 
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))',
+            gap: '24px'
+          }}>
+            {/* Activity Heatmap */}
+            <UserActivityHeatmap userid={userid} user={user} />
+            
+            {/* Confidence Levels */}
+            <ConfidenceLevelsCard userid={userid} user={user} />
+          </div>
         </div>
+
+        {/* Footer Spacing */}
+        <div style={{ height: '40px' }} />
       </div>
     </div>
   );

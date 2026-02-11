@@ -1,10 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
 
 function LearningVelocityCard({ userid }) {
   const API_URL = import.meta.env.VITE_API_URL;
   const [velocity, setVelocity] = useState({
     questionsPerDay: 0,
-    trend: 0 // positive or negative percentage
+    trend: 0
   });
   const [loading, setLoading] = useState(true);
 
@@ -29,7 +30,7 @@ function LearningVelocityCard({ userid }) {
   const getTrendColor = (trend) => {
     if (trend > 0) return '#10b981';
     if (trend < 0) return '#ef4444';
-    return '#888';
+    return '#9ca3af';
   };
 
   const getTrendIcon = (trend) => {
@@ -40,8 +41,8 @@ function LearningVelocityCard({ userid }) {
 
   return (
     <div style={{
-      backgroundColor: '#1a1a1a',
-      border: '1px solid #333',
+      backgroundColor: '#2d2d2d',
+      border: '1px solid #404040',
       borderRadius: '12px',
       padding: '20px',
       transition: 'transform 0.2s, box-shadow 0.2s',
@@ -62,7 +63,7 @@ function LearningVelocityCard({ userid }) {
         marginBottom: '12px'
       }}>
         <p style={{ 
-          color: '#888', 
+          color: '#9ca3af', 
           fontSize: '14px',
           margin: 0,
           fontWeight: '500'
@@ -82,13 +83,13 @@ function LearningVelocityCard({ userid }) {
           <div style={{
             width: '60px',
             height: '16px',
-            backgroundColor: '#333',
+            backgroundColor: '#404040',
             borderRadius: '4px'
           }} />
           <div style={{
             width: '80px',
             height: '12px',
-            backgroundColor: '#333',
+            backgroundColor: '#404040',
             borderRadius: '4px'
           }} />
         </div>
@@ -102,7 +103,7 @@ function LearningVelocityCard({ userid }) {
             lineHeight: '1.2',
             marginBottom: '4px'
           }}>
-            {velocity.questionsPerDay.toFixed(1)} <span style={{ fontSize: '16px', color: '#888' }}>/day</span>
+            {velocity.questionsPerDay.toFixed(1)} <span style={{ fontSize: '16px', color: '#9ca3af' }}>/day</span>
           </p>
           <p style={{ 
             color: getTrendColor(velocity.trend), 

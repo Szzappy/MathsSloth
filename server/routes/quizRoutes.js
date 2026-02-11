@@ -484,6 +484,7 @@ router.get("/topics", async (req, res) => {
   try {
     const topicsResult = await pool.query(`
       SELECT * FROM topics
+      ORDER BY topicid ASC
     `);
 
     res.status(200).json({ topics: topicsResult.rows });

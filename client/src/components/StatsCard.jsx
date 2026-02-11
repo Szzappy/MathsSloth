@@ -1,10 +1,11 @@
+
 import React from 'react';
 
 function StatsCard({ title, value, loading, suffix = '', prefix = '', icon = '' }) {
   return (
     <div style={{
-      backgroundColor: '#1a1a1a',
-      border: '1px solid #333',
+      backgroundColor: '#2d2d2d',
+      border: '1px solid #404040',
       borderRadius: '12px',
       padding: '20px',
       transition: 'transform 0.2s, box-shadow 0.2s',
@@ -12,7 +13,7 @@ function StatsCard({ title, value, loading, suffix = '', prefix = '', icon = '' 
     }}
     onMouseEnter={(e) => {
       e.currentTarget.style.transform = 'translateY(-2px)';
-      e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.3)';
+      e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.3)';
     }}
     onMouseLeave={(e) => {
       e.currentTarget.style.transform = 'translateY(0)';
@@ -25,7 +26,7 @@ function StatsCard({ title, value, loading, suffix = '', prefix = '', icon = '' 
         marginBottom: '8px'
       }}>
         <p style={{ 
-          color: '#888', 
+          color: '#9ca3af', 
           fontSize: '14px',
           margin: 0,
           fontWeight: '500'
@@ -46,7 +47,7 @@ function StatsCard({ title, value, loading, suffix = '', prefix = '', icon = '' 
           <div style={{
             width: '80px',
             height: '20px',
-            backgroundColor: '#333',
+            backgroundColor: '#404040',
             borderRadius: '4px',
             animation: 'pulse 1.5s ease-in-out infinite'
           }} />

@@ -139,7 +139,7 @@ function analyzeHintPatterns(hints) {
 
   const avgLength = hints.reduce((sum, h) => sum + (h.hint_text?.length || 0), 0) / hints.length;
   
-  // Analyze style (simple heuristic - you can make this more sophisticated)
+  // Analyse style (simple heuristic - you can make this more sophisticated)
   const hasQuestions = hints.some(h => h.hint_text && h.hint_text.includes("?"));
   const hasSteps = hints.some(h => h.hint_text && /first|then|next|finally/i.test(h.hint_text));
   
@@ -155,9 +155,9 @@ function buildHintPrompt(params) {
 
   let prompt = `You are a maths tutor. Provide ONE concise hint (2-3 sentences) in clear, understandable language to help a student solve the following question.
 
-QUESTION: ${question}
-TOPICS: ${topics.filter(t => t).join(", ")}
-DIFFICULTY: ${difficulty}/100 (${totalMarks} marks)`;
+  QUESTION: ${question}
+  TOPICS: ${topics.filter(t => t).join(", ")}
+  DIFFICULTY: ${difficulty}/100 (${totalMarks} marks)`; // change difficulty to use the ELO rating instead
 
   if (studentAttempt) {
     prompt += `\nSTUDENT ATTEMPT: ${studentAttempt}`;
@@ -201,6 +201,8 @@ DIFFICULTY: ${difficulty}/100 (${totalMarks} marks)`;
   9. All mathematical notation MUST be properly formatted in LaTeX with $ delimiters
 
   Respond with ONLY the hint text.`;
+
+  console.log(prompt);
 
   return prompt;
 }

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { AreaClosed, Line, Bar } from '@visx/shape';
 import { curveMonotoneX } from '@visx/curve';
@@ -12,11 +13,11 @@ import { bisector } from 'd3-array';
 
 const tooltipStyles = {
   ...defaultStyles,
-  backgroundColor: 'rgba(0, 0, 0, 0.95)',
+  backgroundColor: '#2d2d2d',
   color: 'white',
   padding: 12,
-  borderRadius: 4,
-  border: '1px solid #555',
+  borderRadius: 8,
+  border: '1px solid #10b981',
   fontSize: 12
 };
 
@@ -39,7 +40,6 @@ function GradeProgressChart({ userid, width = 600, height = 400 }) {
       try {
         const response = await fetch(`${API_URL}/analytics/grade-progress/${userid}`);
         const data = await response.json();
-        // Transform data to include date objects
         const transformed = data.map(d => ({
           ...d,
           date: new Date(d.date),
@@ -61,15 +61,15 @@ function GradeProgressChart({ userid, width = 600, height = 400 }) {
   if (loading) {
     return (
       <div style={{
-        backgroundColor: '#1a1a1a',
-        border: '1px solid #333',
+        backgroundColor: '#2d2d2d',
+        border: '1px solid #404040',
         borderRadius: '12px',
         padding: '24px',
         height: '400px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: '#888'
+        color: '#9ca3af'
       }}>
         Loading progress data...
       </div>
@@ -79,15 +79,15 @@ function GradeProgressChart({ userid, width = 600, height = 400 }) {
   if (progressData.length === 0) {
     return (
       <div style={{
-        backgroundColor: '#1a1a1a',
-        border: '1px solid #333',
+        backgroundColor: '#2d2d2d',
+        border: '1px solid #404040',
         borderRadius: '12px',
         padding: '24px',
         height: '400px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: '#888'
+        color: '#9ca3af'
       }}>
         No progress data available
       </div>
@@ -98,11 +98,9 @@ function GradeProgressChart({ userid, width = 600, height = 400 }) {
   const xMax = width - margin.left - margin.right;
   const yMax = height - margin.top - margin.bottom;
 
-  // Accessors
   const getDate = d => d.date;
   const getElo = d => d.elo;
 
-  // Scales
   const dateScale = scaleTime({
     domain: [Math.min(...progressData.map(getDate)), Math.max(...progressData.map(getDate))],
     range: [0, xMax],
@@ -118,7 +116,6 @@ function GradeProgressChart({ userid, width = 600, height = 400 }) {
     nice: true
   });
 
-  // Bisector for tooltip
   const bisectDate = bisector(d => d.date).left;
 
   const handleTooltip = (event) => {
@@ -140,8 +137,8 @@ function GradeProgressChart({ userid, width = 600, height = 400 }) {
 
   return (
     <div style={{
-      backgroundColor: '#1a1a1a',
-      border: '1px solid #333',
+      backgroundColor: '#2d2d2d',
+      border: '1px solid #404040',
       borderRadius: '12px',
       padding: '24px',
       position: 'relative'
@@ -157,25 +154,24 @@ function GradeProgressChart({ userid, width = 600, height = 400 }) {
       </h3>
 
       <svg width={width} height={height}>
-        <LinearGradient id="area-gradient" from="#3b82f6" to="#1e40af" fromOpacity={0.4} toOpacity={0.1} />
+        <LinearGradient id="area-gradient" from="#10b981" to="#059669" fromOpacity={0.4} toOpacity={0.1} />
         
         <Group left={margin.left} top={margin.top}>
           <GridRows
             scale={eloScale}
             width={xMax}
-            stroke="#333"
+            stroke="#404040"
             strokeOpacity={0.3}
             pointerEvents="none"
           />
           <GridColumns
             scale={dateScale}
             height={yMax}
-            stroke="#333"
+            stroke="#404040"
             strokeOpacity={0.3}
             pointerEvents="none"
           />
 
-          {/* Area */}
           <AreaClosed
             data={progressData}
             x={d => dateScale(getDate(d))}
@@ -186,17 +182,15 @@ function GradeProgressChart({ userid, width = 600, height = 400 }) {
             curve={curveMonotoneX}
           />
 
-          {/* Line */}
           <Line
             data={progressData}
             x={d => dateScale(getDate(d))}
             y={d => eloScale(getElo(d))}
-            stroke="#3b82f6"
+            stroke="#10b981"
             strokeWidth={2}
             curve={curveMonotoneX}
           />
 
-          {/* Axes */}
           <AxisBottom
             top={yMax}
             scale={dateScale}
@@ -204,7 +198,7 @@ function GradeProgressChart({ userid, width = 600, height = 400 }) {
             stroke="#666"
             tickStroke="#666"
             tickLabelProps={() => ({
-              fill: '#ddd',
+              fill: '#d1d5db',
               fontSize: 10,
               textAnchor: 'middle'
             })}
@@ -215,20 +209,19 @@ function GradeProgressChart({ userid, width = 600, height = 400 }) {
             stroke="#666"
             tickStroke="#666"
             tickLabelProps={() => ({
-              fill: '#ddd',
+              fill: '#d1d5db',
               fontSize: 10,
               textAnchor: 'end',
               dx: -4
             })}
             label="ELO Rating"
             labelProps={{
-              fill: '#ddd',
+              fill: '#d1d5db',
               fontSize: 12,
               textAnchor: 'middle'
             }}
           />
 
-          {/* Invisible bar for tooltip */}
           <Bar
             x={0}
             y={0}
@@ -239,14 +232,13 @@ function GradeProgressChart({ userid, width = 600, height = 400 }) {
             onMouseLeave={hideTooltip}
           />
 
-          {/* Tooltip indicator */}
           {tooltipData && (
             <>
               <circle
                 cx={dateScale(getDate(tooltipData))}
                 cy={eloScale(getElo(tooltipData))}
                 r={4}
-                fill="#3b82f6"
+                fill="#10b981"
                 stroke="white"
                 strokeWidth={2}
                 pointerEvents="none"
@@ -266,7 +258,6 @@ function GradeProgressChart({ userid, width = 600, height = 400 }) {
         </Group>
       </svg>
 
-      {/* Tooltip */}
       {tooltipOpen && tooltipData && (
         <Tooltip top={tooltipTop} left={tooltipLeft} style={tooltipStyles}>
           <div>
@@ -275,7 +266,7 @@ function GradeProgressChart({ userid, width = 600, height = 400 }) {
           <div style={{ marginTop: 4 }}>
             ELO: <strong>{Math.round(tooltipData.elo)}</strong>
           </div>
-          <div style={{ fontSize: 10, color: '#aaa', marginTop: 4 }}>
+          <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 4 }}>
             {tooltipData.question_count} questions answered
           </div>
         </Tooltip>

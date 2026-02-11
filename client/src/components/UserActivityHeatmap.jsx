@@ -3,16 +3,15 @@ import { Group } from '@visx/group';
 import { Tooltip, useTooltip, defaultStyles } from '@visx/tooltip';
 import { localPoint } from '@visx/event';
 
-// Color scheme for different activity levels
 const colors = {
   none: '#1a1a1a',
-  weak: '#3b82f6',      // 1-4 attempts
-  medium: '#10b981',    // 5-9 attempts
-  stronger: '#f59e0b',  // 10-14 attempts
-  max: '#ef4444'        // 15+ attempts
+  weak: '#10b981',
+  medium: '#059669',
+  stronger: '#047857',
+  max: '#065f46'
 };
 
-export const background = '#0a0a0a';
+export const background = '#2d2d2d';
 
 function getColorForAttempts(count) {
   if (count === 0) return colors.none;
@@ -24,19 +23,19 @@ function getColorForAttempts(count) {
 
 function getIntensityCategory(count) {
   if (count === 0) return 'None';
-  if (count < 5) return 'Weak (1-4)';
+  if (count < 5) return 'Light (1-4)';
   if (count < 10) return 'Medium (5-9)';
-  if (count < 15) return 'Stronger (10-14)';
-  return 'Max (15+)';
+  if (count < 15) return 'Strong (10-14)';
+  return 'Intense (15+)';
 }
 
 const tooltipStyles = {
   ...defaultStyles,
-  backgroundColor: 'rgba(0, 0, 0, 0.95)',
+  backgroundColor: '#2d2d2d',
   color: 'white',
   padding: 12,
-  borderRadius: 4,
-  border: '1px solid #555',
+  borderRadius: 8,
+  border: '1px solid #10b981',
   fontSize: 12
 };
 
@@ -76,14 +75,12 @@ export default function UserActivityHeatmap({
     }
   }, [userid, API_URL]);
 
-  // Process data into GitHub-style format (week columns, day rows)
   const calendarData = useMemo(() => {
     if (data.length === 0) return { weeks: [], dateMap: new Map() };
     
     const dateCountMap = new Map();
     const dateDetailsMap = new Map();
     
-    // Aggregate attempts by date
     data.forEach(attempt => {
       const date = new Date(attempt.attempted_at);
       const dateKey = date.toISOString().split('T')[0];
@@ -104,7 +101,6 @@ export default function UserActivityHeatmap({
       dateDetailsMap.set(dateKey, details);
     });
     
-    // Calculate averages
     dateDetailsMap.forEach((details, key) => {
       if (details.times.length > 0) {
         details.avgTime = Math.round(
@@ -114,20 +110,16 @@ export default function UserActivityHeatmap({
       details.successRate = ((details.correct / details.total) * 100).toFixed(0);
     });
     
-    // Set date range to last 3 months
     const endDate = new Date();
     const startDate = new Date();
     startDate.setMonth(startDate.getMonth() - 3);
     
-    // Start from the Sunday before the start date
     const firstDay = new Date(startDate);
     firstDay.setDate(firstDay.getDate() - firstDay.getDay());
     
-    // End on the Saturday after the end date
     const lastDay = new Date(endDate);
     lastDay.setDate(lastDay.getDate() + (6 - lastDay.getDay()));
     
-    // Build week structure
     const weeks = [];
     const currentDate = new Date(firstDay);
     
@@ -157,15 +149,15 @@ export default function UserActivityHeatmap({
   if (loading) {
     return (
       <div style={{
-        backgroundColor: '#1a1a1a',
-        border: '1px solid #333',
+        backgroundColor: '#2d2d2d',
+        border: '1px solid #404040',
         borderRadius: '12px',
         padding: '24px',
         height: '200px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: '#888'
+        color: '#9ca3af'
       }}>
         Loading activity data...
       </div>
@@ -175,15 +167,15 @@ export default function UserActivityHeatmap({
   if (data.length === 0) {
     return (
       <div style={{
-        backgroundColor: '#1a1a1a',
-        border: '1px solid #333',
+        backgroundColor: '#2d2d2d',
+        border: '1px solid #404040',
         borderRadius: '12px',
         padding: '24px',
         height: '200px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: '#888'
+        color: '#9ca3af'
       }}>
         No activity data available
       </div>
@@ -202,8 +194,8 @@ export default function UserActivityHeatmap({
   return (
     <div style={{ 
       position: 'relative',
-      backgroundColor: '#1a1a1a',
-      border: '1px solid #333',
+      backgroundColor: '#2d2d2d',
+      border: '1px solid #404040',
       borderRadius: '12px',
       padding: '24px',
       overflow: 'auto'
@@ -218,7 +210,7 @@ export default function UserActivityHeatmap({
         Study Activity Heatmap
       </h3>
       <p style={{
-        color: '#888',
+        color: '#9ca3af',
         fontSize: '14px',
         marginTop: 0,
         marginBottom: '16px'
@@ -230,7 +222,6 @@ export default function UserActivityHeatmap({
         <rect x={0} y={0} width={svgWidth} height={svgHeight} fill={background} rx={8} />
         
         <Group top={margin.top} left={margin.left}>
-          {/* Day labels */}
           {dayLabels.map((day, i) => (
             <text
               key={`day-${i}`}
@@ -238,13 +229,12 @@ export default function UserActivityHeatmap({
               y={i * (cellSize + cellGap) + cellSize / 2 + 4}
               textAnchor="end"
               fontSize={10}
-              fill="#888"
+              fill="#9ca3af"
             >
               {day}
             </text>
           ))}
           
-          {/* Month labels */}
           {calendarData.weeks.map((week, weekIndex) => {
             const firstDay = week[0].displayDate;
             if (firstDay.getDate() <= 7 || weekIndex === 0) {
@@ -254,7 +244,7 @@ export default function UserActivityHeatmap({
                   x={weekIndex * (cellSize + cellGap)}
                   y={-8}
                   fontSize={10}
-                  fill="#888"
+                  fill="#9ca3af"
                 >
                   {monthLabels[firstDay.getMonth()]}
                 </text>
@@ -263,7 +253,6 @@ export default function UserActivityHeatmap({
             return null;
           })}
           
-          {/* Calendar cells */}
           {calendarData.weeks.map((week, weekIndex) => (
             week.map((day, dayIndex) => {
               const x = weekIndex * (cellSize + cellGap);
@@ -297,7 +286,6 @@ export default function UserActivityHeatmap({
         </Group>
       </svg>
       
-      {/* Tooltip */}
       {tooltipOpen && tooltipData && (
         <Tooltip top={tooltipTop} left={tooltipLeft} style={tooltipStyles}>
           <div>
@@ -327,7 +315,6 @@ export default function UserActivityHeatmap({
         </Tooltip>
       )}
       
-      {/* Legend */}
       <div style={{ 
         marginTop: 20, 
         display: 'flex', 
@@ -335,7 +322,7 @@ export default function UserActivityHeatmap({
         alignItems: 'center',
         gap: 4,
         fontSize: '12px',
-        color: '#888'
+        color: '#9ca3af'
       }}>
         <span style={{ marginRight: 8 }}>Less</span>
         {[
