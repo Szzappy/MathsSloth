@@ -41,8 +41,8 @@ const tooltipStyles = {
 
 export default function UserActivityHeatmap({ 
   userid,
-  cellSize = 14,
-  cellGap = 3
+  cellSize = 22,
+  cellGap = 5
 }) {
   const API_URL = import.meta.env.VITE_API_URL;
   const [data, setData] = useState([]);

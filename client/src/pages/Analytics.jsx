@@ -32,7 +32,8 @@ function Analytics() {
       try {
         const response = await fetch(`${API_URL}/analytics/predicted-grade/${userid}`);
         const data = await response.json();
-        setPredictedGrade(data.predicted_grade);
+        // API returns { weighted_elo, grade } — store weighted_elo for display
+        setPredictedGrade(data.weighted_elo);
       } catch (error) {
         console.error("Error fetching predicted grade:", error);
       } finally {
@@ -50,7 +51,8 @@ function Analytics() {
     <div style={{ 
       minHeight: '100vh',
       backgroundColor: '#1a1a1a',
-      padding: '24px'
+      padding: '24px',
+      paddingBottom: '48px',
     }}>
       <div style={{ 
         maxWidth: '1600px',
@@ -92,7 +94,7 @@ function Analytics() {
           />
           <StatsCard 
             title="Predicted Grade"
-            value={predictedGrade !== null ? Math.round(predictedGrade) : null}
+            value={predictedGrade !== null ? predictedGrade : null}
             loading={loading}
             suffix=" ELO"
             icon="🎯"
@@ -116,10 +118,7 @@ function Analytics() {
             gridTemplateColumns: 'repeat(auto-fit, minmax(550px, 1fr))',
             gap: '24px'
           }}>
-            {/* Grade Progress Over Time */}
             <GradeProgressChart userid={userid} />
-            
-            {/* Topic Radar Chart */}
             <TopicRadarChart userid={userid} />
           </div>
 
@@ -129,16 +128,10 @@ function Analytics() {
             gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))',
             gap: '24px'
           }}>
-            {/* Activity Heatmap */}
             <UserActivityHeatmap userid={userid} user={user} />
-            
-            {/* Confidence Levels */}
             <ConfidenceLevelsCard userid={userid} user={user} />
           </div>
         </div>
-
-        {/* Footer Spacing */}
-        <div style={{ height: '40px' }} />
       </div>
     </div>
   );

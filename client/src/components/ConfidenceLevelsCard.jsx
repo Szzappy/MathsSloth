@@ -1,190 +1,292 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
-const getConfidenceLevels = async (userid) => {
-  const API_URL = import.meta.env.VITE_API_URL;
+// ── Colour system ────────────────────────────────────────────────────────────
+// One accent: cyan. Everything else is white / mid-grey / dark-grey.
+// The ring opacity communicates score — bright = well calibrated, dim = off.
+// No traffic-light red/amber/green so the eye isn't constantly alarmed.
 
-  try {
-    const response = await fetch(`${API_URL}/analytics/confidence/${userid}`, {
-      method: "GET",
-      headers: {
-        'Content-Type': 'application/json',
-      }
-    });
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.log("Error fetching confidence levels", error.message);
-    return null;
-  }
+const ACCENT   = '#67e8f9'; // cyan-300
+const DIM      = '#374151'; // grey track / empty bars
+const TEXT_HI  = '#f3f4f6'; // near-white labels
+const TEXT_MID = '#9ca3af'; // secondary labels
+const TEXT_LO  = '#4b5563'; // tertiary / metadata
+
+const ringOpacity = score => 0.25 + (score / 100) * 0.75;
+
+const calibrationLabel = (gap) => {
+  const abs = Math.abs(gap);
+  if (abs <= 10) return 'Well calibrated';
+  if (gap > 10)  return 'Overconfident';
+  return 'Underconfident';
+};
+
+function CalibrationRing({ score, size = 44 }) {
+  const r      = (size - 6) / 2;
+  const circ   = 2 * Math.PI * r;
+  const filled = (score / 100) * circ;
+  const op     = ringOpacity(score);
+  return (
+    <svg width={size} height={size} style={{ flexShrink: 0 }}>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={DIM} strokeWidth={4} />
+      <circle
+        cx={size/2} cy={size/2} r={r} fill="none"
+        stroke={ACCENT} strokeWidth={4} opacity={op}
+        strokeDasharray={`${filled} ${circ}`}
+        strokeLinecap="round"
+        transform={`rotate(-90 ${size/2} ${size/2})`}
+        style={{ transition: 'stroke-dasharray 0.5s ease, opacity 0.5s ease' }}
+      />
+      <text
+        x={size/2} y={size/2 + 4}
+        textAnchor="middle"
+        fill={ACCENT} fillOpacity={op}
+        fontSize={10} fontWeight={700}
+      >
+        {score}
+      </text>
+    </svg>
+  );
 }
 
-function ConfidenceLevelsCard({userid, user}) {
-  const [confidenceLevels, setConfidenceLevels] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
+function Bar({ pct, accent = false }) {
+  return (
+    <div style={{ width: '100%', height: 3, backgroundColor: DIM, borderRadius: 2, overflow: 'hidden' }}>
+      <div style={{
+        width: `${pct}%`, height: '100%', borderRadius: 2,
+        backgroundColor: accent ? ACCENT : TEXT_MID,
+        opacity: accent ? 0.85 : 0.55,
+        transition: 'width 0.4s ease',
+      }} />
+    </div>
+  );
+}
 
-  React.useEffect(() => {
-    const fetchConfidenceLevels = async () => {
-      const data = await getConfidenceLevels(userid);
-      if (data) {
-        setConfidenceLevels(data);
-      }
-      setLoading(false);
-    };
-    if (userid) {
-      fetchConfidenceLevels();
-    }
-  }, [userid]);
-
-  const getConfidenceColor = (confidence) => {
-    if (confidence >= 4.5) return '#10b981'; // Green - Excellent
-    if (confidence >= 3.5) return '#3b82f6'; // Blue - Good
-    if (confidence >= 2.5) return '#f59e0b'; // Orange - Fair
-    return '#ef4444'; // Red - Needs Practice
-  };
-
-  const getConfidenceLabel = (confidence) => {
-    if (confidence >= 4.5) return 'Excellent';
-    if (confidence >= 3.5) return 'Good';
-    if (confidence >= 2.5) return 'Fair';
-    return 'Needs Practice';
-  };
-
-  const getConfidenceStars = (confidence) => {
-    const fullStars = Math.floor(confidence);
-    const hasHalfStar = confidence % 1 >= 0.5;
-    let stars = '★'.repeat(fullStars);
-    if (hasHalfStar) stars += '☆';
-    stars += '☆'.repeat(5 - Math.ceil(confidence));
-    return stars;
-  };
+function SubtopicCalibRow({ topic }) {
+  const conf  = parseFloat(topic.avg_confidence);
+  const acc   = parseFloat(topic.accuracy);
+  const score = parseInt(topic.calibration_score);
+  const gap   = parseFloat(topic.calibration_gap);
 
   return (
     <div style={{
-      backgroundColor: '#2d2d2d',
-      border: '1px solid #404040',
-      borderRadius: '12px',
-      padding: '24px',
-      minHeight: '300px'
+      display: 'flex', gap: 10, padding: '10px 12px',
+      borderRadius: 7, backgroundColor: '#181818',
+      border: '1px solid #1f2937', alignItems: 'center',
     }}>
-      <h3 style={{ 
-        color: '#fff', 
-        fontSize: '18px', 
-        fontWeight: '600',
-        marginBottom: '16px',
-        marginTop: 0
-      }}>
-        Confidence Levels for: {user}
-      </h3>
+      <div style={{
+        width: 2, height: 44, flexShrink: 0, borderRadius: 1,
+        backgroundColor: ACCENT, opacity: ringOpacity(score),
+      }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 6 }}>
+          <span style={{ color: TEXT_MID, fontSize: 11, fontWeight: 700 }}>{topic.topic_code}</span>
+          <span style={{ color: TEXT_HI,  fontSize: 13, fontWeight: 500 }}>{topic.topic_name}</span>
+          <span style={{ color: TEXT_LO,  fontSize: 10, marginLeft: 'auto' }}>{topic.attempt_count} attempts</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 14px' }}>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+              <span style={{ color: TEXT_LO, fontSize: 10 }}>CONFIDENCE</span>
+              <span style={{ color: TEXT_MID, fontSize: 10, fontWeight: 600 }}>{conf.toFixed(1)}/5</span>
+            </div>
+            <Bar pct={(conf / 5) * 100} accent />
+          </div>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+              <span style={{ color: TEXT_LO, fontSize: 10 }}>ACCURACY</span>
+              <span style={{ color: TEXT_MID, fontSize: 10, fontWeight: 600 }}>{acc.toFixed(0)}%</span>
+            </div>
+            <Bar pct={acc} accent={false} />
+          </div>
+        </div>
+        <div style={{ marginTop: 5 }}>
+          <span style={{ color: TEXT_MID, fontSize: 10, fontWeight: 500 }}>{calibrationLabel(gap)}</span>
+          {Math.abs(gap) > 5 && (
+            <span style={{ color: TEXT_LO, fontSize: 10, marginLeft: 6 }}>
+              ({gap > 0 ? '+' : ''}{gap.toFixed(0)}pp)
+            </span>
+          )}
+        </div>
+      </div>
+      <CalibrationRing score={score} size={44} />
+    </div>
+  );
+}
 
-      {loading ? (
+function ParentCalibRow({ group, expanded, onToggle }) {
+  const hasChildren = group.children.length > 0;
+  const score = parseInt(group.avgScore);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <div
+        onClick={hasChildren ? onToggle : undefined}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '12px 14px', borderRadius: 9, backgroundColor: '#222',
+          border: `1px solid ${expanded && hasChildren ? '#374151' : '#1f2937'}`,
+          cursor: hasChildren ? 'pointer' : 'default',
+          transition: 'background-color 0.15s, border-color 0.2s',
+          userSelect: 'none',
+        }}
+        onMouseEnter={e => hasChildren && (e.currentTarget.style.backgroundColor = '#262626')}
+        onMouseLeave={e => hasChildren && (e.currentTarget.style.backgroundColor = '#222')}
+      >
         <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '200px',
-          color: '#9ca3af'
+          width: 14, flexShrink: 0, color: hasChildren ? TEXT_MID : 'transparent',
+          fontSize: 9, transition: 'transform 0.2s',
+          transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
         }}>
-          Loading confidence data...
+          {hasChildren ? '▶' : ''}
         </div>
-      ) : confidenceLevels.length === 0 ? (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '200px',
-          color: '#9ca3af'
-        }}>
-          No confidence data available
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {confidenceLevels.map((level) => {
-            const confidence = parseFloat(level.average_confidence);
-            return (
-              <div 
-                key={level.topic_code}
-                style={{
-                  backgroundColor: '#1a1a1a',
-                  border: '1px solid #404040',
-                  borderRadius: '8px',
-                  padding: '16px',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateX(4px)';
-                  e.currentTarget.style.borderColor = getConfidenceColor(confidence);
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateX(0)';
-                  e.currentTarget.style.borderColor = '#404040';
-                }}
-              >
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: '8px'
-                }}>
-                  <span style={{ 
-                    color: '#d1d5db', 
-                    fontSize: '14px',
-                    fontWeight: '500'
-                  }}>
-                    {level.topic_code}
-                  </span>
-                  <div style={{ 
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px'
-                  }}>
-                    <span style={{ 
-                      color: getConfidenceColor(confidence),
-                      fontSize: '18px',
-                      letterSpacing: '2px'
-                    }}>
-                      {getConfidenceStars(confidence)}
-                    </span>
-                    <span style={{ 
-                      color: getConfidenceColor(confidence),
-                      fontSize: '14px',
-                      fontWeight: '600'
-                    }}>
-                      {confidence.toFixed(1)}/5
-                    </span>
-                  </div>
-                </div>
-                
-                {/* Progress bar */}
-                <div style={{
-                  width: '100%',
-                  height: '6px',
-                  backgroundColor: '#404040',
-                  borderRadius: '3px',
-                  overflow: 'hidden'
-                }}>
-                  <div style={{
-                    width: `${(confidence / 5) * 100}%`,
-                    height: '100%',
-                    backgroundColor: getConfidenceColor(confidence),
-                    transition: 'width 0.3s ease'
-                  }} />
-                </div>
-                
-                <div style={{
-                  marginTop: '4px',
-                  fontSize: '12px',
-                  color: getConfidenceColor(confidence),
-                  fontWeight: '500'
-                }}>
-                  {getConfidenceLabel(confidence)}
-                </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 5 }}>
+            <span style={{ color: TEXT_MID, fontSize: 11, fontWeight: 700 }}>{group.code}</span>
+            <span style={{ color: TEXT_HI,  fontSize: 14, fontWeight: 600 }}>{group.name}</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 14px' }}>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                <span style={{ color: TEXT_LO, fontSize: 10 }}>AVG CONFIDENCE</span>
+                <span style={{ color: TEXT_MID, fontSize: 10, fontWeight: 600 }}>{group.avgConf.toFixed(1)}/5</span>
               </div>
-            );
-          })}
+              <Bar pct={(group.avgConf / 5) * 100} accent />
+            </div>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                <span style={{ color: TEXT_LO, fontSize: 10 }}>AVG ACCURACY</span>
+                <span style={{ color: TEXT_MID, fontSize: 10, fontWeight: 600 }}>{group.avgAcc.toFixed(0)}%</span>
+              </div>
+              <Bar pct={group.avgAcc} accent={false} />
+            </div>
+          </div>
+          <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ color: TEXT_MID, fontSize: 10, fontWeight: 500 }}>
+              {calibrationLabel(group.avgGap)}
+            </span>
+            {hasChildren && (
+              <span style={{ color: TEXT_LO, fontSize: 10 }}>{group.children.length} subtopics</span>
+            )}
+          </div>
+        </div>
+        <CalibrationRing score={score} size={50} />
+      </div>
+
+      {hasChildren && expanded && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingLeft: 20 }}>
+          {group.children
+            .sort((a, b) => a.topic_code.localeCompare(b.topic_code))
+            .map(child => <SubtopicCalibRow key={child.topic_code} topic={child} />)}
         </div>
       )}
     </div>
   );
 }
+
+function groupCalibByParent(topics) {
+  if (!Array.isArray(topics)) return [];
+  const parentMap = new Map();
+  for (const t of topics) {
+    const parentCode = t.parent_topic || t.topic_code;
+    const parentName = t.parent_topic_name || t.topic_name;
+    if (!parentMap.has(parentCode)) {
+      parentMap.set(parentCode, { code: parentCode, name: parentName, children: [], _self: null });
+    }
+    if (t.parent_topic) parentMap.get(parentCode).children.push(t);
+    else parentMap.get(parentCode)._self = t;
+  }
+  return Array.from(parentMap.values()).map(group => {
+    const all = group.children.length > 0 ? group.children : (group._self ? [group._self] : []);
+    return {
+      ...group,
+      avgScore: Math.round(all.reduce((s, t) => s + parseInt(t.calibration_score),  0) / Math.max(1, all.length)),
+      avgConf:  all.reduce((s, t) => s + parseFloat(t.avg_confidence), 0) / Math.max(1, all.length),
+      avgAcc:   all.reduce((s, t) => s + parseFloat(t.accuracy),       0) / Math.max(1, all.length),
+      avgGap:   all.reduce((s, t) => s + parseFloat(t.calibration_gap),0) / Math.max(1, all.length),
+    };
+  }).sort((a, b) => a.code.localeCompare(b.code));
+}
+
+function ConfidenceLevelsCard({ userid }) {
+  const API_URL = import.meta.env.VITE_API_URL;
+  const [calibData, setCalibData] = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [expanded,  setExpanded]  = useState({});
+
+  useEffect(() => {
+    if (!userid) return;
+    (async () => {
+      try {
+        const res  = await fetch(`${API_URL}/analytics/topic-calibration/${userid}`);
+        const data = await res.json();
+        const safe = Array.isArray(data) ? data : [];
+        setCalibData(safe);
+        setExpanded({});
+      } catch (e) {
+        console.error('Error fetching calibration data:', e);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [userid, API_URL]);
+
+  const toggle = code => setExpanded(prev => ({ ...prev, [code]: !prev[code] }));
+  const groups = groupCalibByParent(calibData);
+  const overallScore = groups.length > 0
+    ? Math.round(groups.reduce((s, g) => s + g.avgScore, 0) / groups.length)
+    : null;
+
+  return (
+    <div style={{ backgroundColor: '#2d2d2d', border: '1px solid #404040', borderRadius: 12, padding: 24, minHeight: 300 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+        <div>
+          <h3 style={{ color: TEXT_HI, fontSize: 18, fontWeight: 600, margin: 0 }}>Confidence Calibration</h3>
+          <div style={{ color: TEXT_MID, fontSize: 12, marginTop: 4 }}>
+            How accurately does your confidence match your actual performance?
+          </div>
+        </div>
+        {overallScore !== null && (
+          <div style={{ textAlign: 'center' }}>
+            <CalibrationRing score={overallScore} size={56} />
+            <div style={{ color: TEXT_LO, fontSize: 10, marginTop: 3 }}>OVERALL</div>
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
+        <span style={{ color: TEXT_LO, fontSize: 11 }}>Ring score: 100 = perfect · fades as gap widens</span>
+        <span style={{ color: TEXT_LO, fontSize: 11 }}>
+          <span style={{ color: ACCENT, opacity: 0.85 }}>━</span> Confidence &nbsp;
+          <span style={{ color: TEXT_MID, opacity: 0.55 }}>━</span> Accuracy
+        </span>
+      </div>
+
+      {loading ? (
+        <div style={centeredMsg}>Loading calibration data...</div>
+      ) : groups.length === 0 ? (
+        <div style={centeredMsg}>No data yet — answer some questions to see your calibration</div>
+      ) : (
+        <div style={{
+          display: 'flex', flexDirection: 'column', gap: 6,
+          maxHeight: 520, overflowY: 'auto', paddingRight: 6,
+          scrollbarWidth: 'thin', scrollbarColor: '#374151 #1a1a1a',
+        }}>
+          {groups.map(g => (
+            <ParentCalibRow
+              key={g.code} group={g}
+              expanded={!!expanded[g.code]}
+              onToggle={() => toggle(g.code)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const centeredMsg = {
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  minHeight: 200, color: TEXT_MID, fontSize: 14,
+};
 
 export default ConfidenceLevelsCard;

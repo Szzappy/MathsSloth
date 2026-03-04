@@ -1,152 +1,161 @@
-import React, {useEffect, useState } from 'react';
-
-const getUserTopicEloAndGrade = async (userid) => {
-  const API_URL = import.meta.env.VITE_API_URL;
-
-  try {
-    const response = await fetch(`${API_URL}/analytics/topic-elos/${userid}`, {
-      method: "GET",
-      headers: {
-        'Content-Type': 'application/json',
-      }
-    });
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.log("Error fetching topic elos", error.message);
-    return null;
-  }
-};
+import React, { useEffect, useState } from 'react';
 
 const getGradeFromElo = (elo) => {
-  if (elo >= 2000) return { grade: 9, color: '#10b981' };
-  if (elo >= 1800) return { grade: 8, color: '#10b981' };
-  if (elo >= 1600) return { grade: 7, color: '#3b82f6' };
-  if (elo >= 1400) return { grade: 6, color: '#3b82f6' };
-  if (elo >= 1200) return { grade: 5, color: '#f59e0b' };
-  if (elo >= 1000) return { grade: 4, color: '#f59e0b' };
-  return { grade: 3, color: '#ef4444' };
+  if (elo >= 2000) return { grade: 'A*', color: '#10b981' };
+  if (elo >= 1800) return { grade: 'A',  color: '#10b981' };
+  if (elo >= 1600) return { grade: 'B',  color: '#3b82f6' };
+  if (elo >= 1400) return { grade: 'C',  color: '#3b82f6' };
+  if (elo >= 1200) return { grade: 'D',  color: '#f59e0b' };
+  if (elo >= 1000) return { grade: 'E',  color: '#f59e0b' };
+  return              { grade: 'U',  color: '#ef4444' };
 };
 
-function TopicEloAndGradeCard({userid, user}) {
-  const [topicElos, setTopicElos] = useState([]);
-  const [loading, setLoading] = useState(true);
+function groupByParent(topics) {
+  const parentMap = new Map();
 
-  useEffect(() => {
-    const fetchTopicElos = async () => {
-      const data = await getUserTopicEloAndGrade(userid);
-      if (data) {
-        setTopicElos(data);
-      }
-      setLoading(false);
-    };
-
-    if (userid) {
-      fetchTopicElos();
+  for (const t of topics) {
+    const parentCode = t.parent_topic || t.topic_code;
+    const parentName = t.parent_topic_name || t.topic_name;
+    if (!parentMap.has(parentCode)) {
+      parentMap.set(parentCode, { code: parentCode, name: parentName, children: [], _self: null });
     }
-  }, [userid]);
+    if (t.parent_topic) {
+      parentMap.get(parentCode).children.push(t);
+    } else {
+      parentMap.get(parentCode)._self = t;
+    }
+  }
 
+  return Array.from(parentMap.values()).map(group => {
+    const allTopics = group.children.length > 0 ? group.children : (group._self ? [group._self] : []);
+    const totalWeight = allTopics.reduce((s, t) => s + parseFloat(t.exam_weight || 1), 0);
+    const weightedElo = totalWeight > 0
+      ? allTopics.reduce((s, t) => s + Number(t.elo_rating) * parseFloat(t.exam_weight || 1), 0) / totalWeight
+      : (allTopics[0] ? Number(allTopics[0].elo_rating) : 1200);
+    return { ...group, weightedElo, allTopics };
+  }).sort((a, b) => a.code.localeCompare(b.code));
+}
+
+function EloBar({ elo, color }) {
+  const pct = Math.min(100, Math.max(0, ((elo - 1000) / 1000) * 100));
   return (
-    <div style={{
-      backgroundColor: '#2d2d2d',
-      border: '1px solid #404040',
-      borderRadius: '12px',
-      padding: '24px',
-      minHeight: '300px'
-    }}>
-      <h3 style={{ 
-        color: '#fff', 
-        fontSize: '18px', 
-        fontWeight: '600',
-        marginBottom: '16px',
-        marginTop: 0
-      }}>
-        Topic ELO and Grade Card for: {user}
-      </h3>
+    <div style={{ width: '100%', height: 4, backgroundColor: '#2a2a2a', borderRadius: 2, overflow: 'hidden', marginTop: 5 }}>
+      <div style={{ width: `${pct}%`, height: '100%', backgroundColor: color, borderRadius: 2, transition: 'width 0.4s ease' }} />
+    </div>
+  );
+}
 
-      {loading ? (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '200px',
-          color: '#9ca3af'
-        }}>
-          Loading topic data...
+function GradeBadge({ elo, size = 'md' }) {
+  const { grade, color } = getGradeFromElo(elo);
+  const dim = size === 'sm' ? { padding: '3px 8px', fontSize: 12 } : { padding: '5px 12px', fontSize: 16 };
+  return (
+    <div style={{ backgroundColor: color + '22', border: `1px solid ${color}55`, color, borderRadius: 7, fontWeight: 700, minWidth: 34, textAlign: 'center', flexShrink: 0, ...dim }}>
+      {grade}
+    </div>
+  );
+}
+
+function SubtopicRow({ topic }) {
+  const elo = Number(topic.elo_rating);
+  const { color } = getGradeFromElo(elo);
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 7, backgroundColor: '#181818', border: '1px solid #262626' }}>
+      <div style={{ width: 2, height: 26, backgroundColor: color + '55', borderRadius: 1, flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ color: '#c9d1db', fontSize: 13, fontWeight: 500 }}>
+          <span style={{ color, fontSize: 11, fontWeight: 700, marginRight: 6 }}>{topic.topic_code}</span>
+          {topic.topic_name}
         </div>
-      ) : topicElos.length === 0 ? (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '200px',
-          color: '#9ca3af'
-        }}>
-          No topic data available
+        <EloBar elo={elo} color={color} />
+      </div>
+      <div style={{ color: '#6b7280', fontSize: 11, marginRight: 4, flexShrink: 0 }}>{Math.round(elo)}</div>
+      <GradeBadge elo={elo} size="sm" />
+    </div>
+  );
+}
+
+function ParentTopicRow({ group, expanded, onToggle }) {
+  const { color } = getGradeFromElo(group.weightedElo);
+  const hasChildren = group.children.length > 0;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div
+        onClick={hasChildren ? onToggle : undefined}
+        style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 9, backgroundColor: '#222', border: `1px solid ${expanded && hasChildren ? color + '55' : '#333'}`, cursor: hasChildren ? 'pointer' : 'default', transition: 'border-color 0.2s', userSelect: 'none' }}
+        onMouseEnter={e => hasChildren && (e.currentTarget.style.backgroundColor = '#282828')}
+        onMouseLeave={e => hasChildren && (e.currentTarget.style.backgroundColor = '#222')}
+      >
+        <div style={{ width: 16, height: 16, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: hasChildren ? color : 'transparent', fontSize: 9, transition: 'transform 0.2s', transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+          {hasChildren ? '▶' : ''}
         </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {topicElos.map((topic) => {
-            const elo = parseFloat(topic.elo_rating);
-            const { grade, color } = getGradeFromElo(elo);
-            
-            return (
-              <div 
-                key={topic.topic_code}
-                style={{
-                  backgroundColor: '#1a1a1a',
-                  border: '1px solid #404040',
-                  borderRadius: '8px',
-                  padding: '16px',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateX(4px)';
-                  e.currentTarget.style.borderColor = color;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateX(0)';
-                  e.currentTarget.style.borderColor = '#404040';
-                }}
-              >
-                <div style={{ flex: 1 }}>
-                  <div style={{ 
-                    color: '#d1d5db', 
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    marginBottom: '4px'
-                  }}>
-                    {topic.topic_code} - {topic.topic_name}
-                  </div>
-                  <div style={{ 
-                    color: '#9ca3af', 
-                    fontSize: '12px'
-                  }}>
-                    ELO: {Math.round(elo)}
-                  </div>
-                </div>
-                <div style={{
-                  backgroundColor: color,
-                  color: 'white',
-                  borderRadius: '8px',
-                  padding: '8px 16px',
-                  fontWeight: 'bold',
-                  fontSize: '18px',
-                  minWidth: '50px',
-                  textAlign: 'center'
-                }}>
-                  {grade}
-                </div>
-              </div>
-            );
-          })}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+            <span style={{ color, fontSize: 11, fontWeight: 700 }}>{group.code}</span>
+            <span style={{ color: '#d1d5db', fontSize: 14, fontWeight: 600 }}>{group.name}</span>
+          </div>
+          <EloBar elo={group.weightedElo} color={color} />
+        </div>
+        <div style={{ textAlign: 'right', flexShrink: 0, marginRight: 8 }}>
+          <div style={{ color: '#6b7280', fontSize: 11 }}>{Math.round(group.weightedElo)} ELO</div>
+          {hasChildren && <div style={{ color: '#444', fontSize: 10 }}>{group.children.length} subtopics</div>}
+        </div>
+        <GradeBadge elo={group.weightedElo} size="md" />
+      </div>
+      {hasChildren && expanded && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingLeft: 20 }}>
+          {group.children.sort((a, b) => a.topic_code.localeCompare(b.topic_code)).map(child => (
+            <SubtopicRow key={child.topic_code} topic={child} />
+          ))}
         </div>
       )}
     </div>
   );
 }
+
+function TopicEloAndGradeCard({ userid, user }) {
+  const API_URL = import.meta.env.VITE_API_URL;
+  const [topicElos, setTopicElos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState({});
+
+  useEffect(() => {
+    if (!userid) return;
+    (async () => {
+      try {
+        const res = await fetch(`${API_URL}/analytics/topic-elos/${userid}`);
+        const data = await res.json();
+        setTopicElos(data);
+        setExpanded({});
+      } catch (e) {
+        console.error('Error fetching topic elos:', e);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [userid, API_URL]);
+
+  const toggle = code => setExpanded(prev => ({ ...prev, [code]: !prev[code] }));
+  const groups = groupByParent(topicElos);
+
+  return (
+    <div style={{ backgroundColor: '#2d2d2d', border: '1px solid #404040', borderRadius: 12, padding: 24, minHeight: 300 }}>
+      <div style={{ marginBottom: 16 }}>
+        <h3 style={{ color: '#fff', fontSize: 18, fontWeight: 600, margin: 0 }}>Topic ELO &amp; Grade</h3>
+        <div style={{ color: '#6b7280', fontSize: 12, marginTop: 4 }}>Click a parent topic to expand subtopics</div>
+      </div>
+      {loading ? (
+        <div style={centeredMsg}>Loading topic data...</div>
+      ) : groups.length === 0 ? (
+        <div style={centeredMsg}>No topic data available yet</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 520, overflowY: 'auto', paddingRight: 6, scrollbarWidth: 'thin', scrollbarColor: '#444 #1a1a1a' }}>
+          {groups.map(g => <ParentTopicRow key={g.code} group={g} expanded={!!expanded[g.code]} onToggle={() => toggle(g.code)} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const centeredMsg = { display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200, color: '#6b7280', fontSize: 14 };
 
 export default TopicEloAndGradeCard;

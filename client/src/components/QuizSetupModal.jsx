@@ -140,67 +140,96 @@ function QuizSetupModal({ onClose }) {
         {/* Step 0: Choose quiz type */}
         {index === 0 && (
           <div>
-            <p style={{
-              color: '#d1d5db',
-              fontSize: '16px',
-              marginBottom: '24px'
-            }}>
+            <p
+              style={{
+                color: '#d1d5db',
+                fontSize: '16px',
+                marginBottom: '24px',
+                textAlign: 'center',
+              }}
+            >
               Pick a category
             </p>
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px'
-            }}>
-              <button 
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '16px',
+              }}
+            >
+              {/* Adaptive Quiz */}
+              <button
                 onClick={() => {
                   setIndex(1);
                   setQuizType('adaptive');
                   navigate('/quiz');
                 }}
                 style={{
-                  padding: '16px 24px',
+                  height: '180px',
                   backgroundColor: '#10b981',
                   color: '#fff',
-                  fontSize: '16px',
-                  fontWeight: '600',
+                  fontSize: '18px',
+                  fontWeight: '700',
                   border: 'none',
-                  borderRadius: '8px',
+                  borderRadius: '12px',
                   cursor: 'pointer',
-                  transition: 'all 0.2s'
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '12px',
+                  transition: 'transform 0.2s, background-color 0.2s',
                 }}
-                onMouseEnter={(e) => e.target.style.backgroundColor = '#059669'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = '#10b981'}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#059669';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = '#10b981';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}
               >
-                ⚡ Adaptive Quiz
+                <span style={{ fontSize: '32px' }}>⚡</span>
+                Adaptive Quiz
               </button>
-              <button 
+
+              {/* Custom Quiz */}
+              <button
                 onClick={() => {
                   setIndex(2);
                   getTopics();
                   setQuizType('custom');
                 }}
                 style={{
-                  padding: '16px 24px',
+                  height: '180px',
                   backgroundColor: '#1a1a1a',
                   color: '#10b981',
-                  fontSize: '16px',
-                  fontWeight: '600',
+                  fontSize: '18px',
+                  fontWeight: '700',
                   border: '2px solid #10b981',
-                  borderRadius: '8px',
+                  borderRadius: '12px',
                   cursor: 'pointer',
-                  transition: 'all 0.2s'
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '12px',
+                  transition: 'transform 0.2s, background-color 0.2s, color 0.2s',
                 }}
                 onMouseEnter={(e) => {
-                  e.target.style.backgroundColor = '#10b981';
-                  e.target.style.color = '#fff';
+                  e.currentTarget.style.backgroundColor = '#10b981';
+                  e.currentTarget.style.color = '#fff';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
                 }}
                 onMouseLeave={(e) => {
-                  e.target.style.backgroundColor = '#1a1a1a';
-                  e.target.style.color = '#10b981';
+                  e.currentTarget.style.backgroundColor = '#1a1a1a';
+                  e.currentTarget.style.color = '#10b981';
+                  e.currentTarget.style.transform = 'translateY(0)';
                 }}
               >
-                🎨 Custom Quiz
+                <span style={{ fontSize: '32px' }}>🎨</span>
+                Custom Quiz
               </button>
             </div>
           </div>

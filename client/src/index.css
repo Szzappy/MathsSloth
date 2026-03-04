@@ -1,1 +1,16 @@
 @import "tailwindcss";
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  background-color: #1a1a1a;
+  overscroll-behavior: none;
+}
+
+#root {
+  background-color: #1a1a1a;
+}

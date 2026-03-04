@@ -42,7 +42,7 @@ function Navbar() {
           <Link 
             to="/dashboard"
             style={{
-              fontSize: '20px',
+              fontSize: '26px',
               fontWeight: 'bold',
               color: '#fff',
               textDecoration: 'none',
@@ -254,7 +254,7 @@ function Navbar() {
           <Link 
             to="/"
             style={{
-              fontSize: '20px',
+              fontSize: '26px',
               fontWeight: 'bold',
               color: '#fff',
               textDecoration: 'none',
