@@ -19,7 +19,7 @@ DROP TABLE IF EXISTS users CASCADE;
 
 CREATE TABLE users (
   userid SERIAL PRIMARY KEY,
-  username VARCHAR(255) NOT NULL UNIQUE,
+  username VARCHAR(255),
   email VARCHAR(255) NOT NULL UNIQUE,
   password VARCHAR(255),
   is_verified BOOLEAN DEFAULT FALSE,
@@ -135,7 +135,7 @@ CREATE TABLE topics (
   parent_topic VARCHAR(50) REFERENCES topics(topic_code) ON DELETE SET NULL,
 
  -- Used for objective 2d: Likelihood to appear in exam
-  exam_weight DECIMAL(3,2) DEFAULT 1.0 -- total digits: 3, digits after decimal: 2
+  exam_weight DECIMAL(4,2) DEFAULT 1.0 -- total digits: 4, digits after decimal: 2
 );
 
 CREATE INDEX idx_topics_parent_topic ON topics(parent_topic);
@@ -145,42 +145,77 @@ CREATE TABLE questions (
   questionid SERIAL PRIMARY KEY,
   question_text TEXT NOT NULL,
   image_url TEXT,
-  question_format VARCHAR(50) NOT NULL,
-  correct_answer TEXT,
-  answer_options JSONB, -- will be used for multiple choice questions
-  explanation TEXT, -- The rubric used for feynman-style questions
+  question_format VARCHAR(50) NOT NULL, -- feynman, multiple choice, self mark
+  correct_answer TEXT, -- for multiple choice
+  answer_options JSONB,       -- MCQ: { "options": [{ "label": "A", "text": "..." }, ...] }
+  explanation TEXT,           -- Feynman rubric / mark scheme used for AI grading
+  total_marks INTEGER DEFAULT 1,
 
-  difficulty INTEGER CHECK (difficulty BETWEEN 1 AND 100) NOT NULL,
-  total_marks INTEGER DEFAULT 1, -- might not be needed
-
-  -- ELO/GLICKO-2 RATINGS (Dynamic difficulty) 
-  -- Question difficulty rating. 1500 = average, higher = harder
+  -- ELO/GLICKO-2 RATINGS (Dynamic difficulty)
   elo_rating DECIMAL(6,2) DEFAULT 1500.00 CHECK (elo_rating BETWEEN 800 AND 2400),
-  
-  -- Rating Deviation (uncertainty about difficulty). 350 = new question, <100 = well-calibrated
-  glicko_rd DECIMAL(6,2) DEFAULT 350.00 CHECK (glicko_rd BETWEEN 30 AND 350),
-  
-  -- Rating volatility (how much the rating fluctuates)
+  glicko_rd DECIMAL(6,2) DEFAULT 150.00 CHECK (glicko_rd BETWEEN 30 AND 350),
   glicko_volatility DECIMAL(4,3) DEFAULT 0.060,
 
-  -- ==== CALIBRATION METADATA ====
+  -- CALIBRATION METADATA
   attempts_count INTEGER DEFAULT 0,
   correct_count INTEGER DEFAULT 0,
   avg_time_seconds INTEGER,
 
-  -- ANCHOR QUESTIONS (Fixed-difficulty reference points for stable grading)
-  -- These questions NEVER update their Elo rating - they define grade boundaries
+  -- ANCHOR QUESTIONS (Fixed-difficulty reference points — never update their Elo)
   is_anchor BOOLEAN DEFAULT FALSE,
   anchor_grade_level VARCHAR(2) CHECK (anchor_grade_level IN ('E', 'D', 'C', 'B', 'A', 'A*')),
-  anchor_source VARCHAR(200), -- e.g., "Edexcel June 2023 Paper 1 Q7"
+
+  -- MULTI-PART QUESTION SUPPORT
+  -- If parent_question_id is NULL, this is a standalone or top-level question.
+  -- If set, this row is a child part (e.g. part a, b, c) of the parent question.
+  parent_question_id INTEGER REFERENCES questions(questionid) ON DELETE CASCADE,
+  part_label VARCHAR(10),       -- e.g. 'a', 'b', 'c', '(i)', '(ii)'
+  order_index INTEGER DEFAULT 0, -- display order among siblings
 
   created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+  updated_at TIMESTAMP DEFAULT NOW(),
+
+  -- =====================
+  --   CONSTRAINTS
+  -- =====================
+
+  -- A question cannot reference itself as its own parent
+  CONSTRAINT no_self_reference CHECK (parent_question_id != questionid),
+
+  -- Anchor questions must be standalone (cannot be a child part)
+  CONSTRAINT anchor_no_parts CHECK (NOT (is_anchor = TRUE AND parent_question_id IS NOT NULL)),
+
+  -- question_format must be one of the known types
+  CONSTRAINT valid_question_format CHECK (
+    question_format IN ('multiple_choice', 'feynman', 'self_mark')
+  ),
+
+  -- MCQ questions must have answer_options populated; others must not
+  CONSTRAINT mcq_requires_options CHECK (
+    (question_format = 'multiple_choice' AND answer_options IS NOT NULL)
+    OR
+    (question_format != 'multiple_choice' AND answer_options IS NULL)
+  ),
+
+  -- MCQ questions must have a correct_answer
+  CONSTRAINT mcq_requires_correct_answer CHECK (
+    question_format != 'multiple_choice' OR correct_answer IS NOT NULL
+  ),
+
+  -- Feynman questions must have a rubric
+  CONSTRAINT feynman_requires_rubric CHECK (
+    question_format != 'feynman' OR explanation IS NOT NULL
+  ),
+
+  -- Feynman questions must be standalone (cannot be a child part)
+  CONSTRAINT feynman_no_parts CHECK (
+    NOT (question_format = 'feynman' AND parent_question_id IS NOT NULL)
+  )
 );
 
-CREATE INDEX idx_questions_difficulty ON questions(difficulty);
 CREATE INDEX idx_questions_elo ON questions(elo_rating);
 CREATE INDEX idx_questions_anchor ON questions(is_anchor, anchor_grade_level) WHERE is_anchor = TRUE;
+CREATE INDEX idx_questions_parent ON questions(parent_question_id) WHERE parent_question_id IS NOT NULL;
 
 -- used for self marking -> Users should be able to click on the parts of the mark scheme they got right to award themselves marks
 CREATE TABLE mark_scheme_items (
@@ -207,6 +242,16 @@ CREATE TABLE question_topics (
 );
 
 CREATE INDEX idx_question_topics_topicid ON question_topics(topic_code);
+
+DELETE TABLE IF EXISTS user_hints CASCADE;
+CREATE TABLE user_hints (
+  hintid SERIAL PRIMARY KEY,
+  userid INTEGER REFERENCES users(userid) ON DELETE CASCADE,
+  questionid INTEGER REFERENCES questions(questionid) ON DELETE CASCADE,
+  hint_text TEXT NOT NULL,
+  helpful INTEGER, -- 1 = not helpful, 2 = didn't click yes or no, forgot 3 = helpful
+  created_at TIMESTAMP DEFAULT NOW()
+);
 
 
 -- =====================================================================================================================================================
@@ -261,15 +306,24 @@ CREATE TABLE question_attempts (
   questionid INTEGER REFERENCES questions(questionid) ON DELETE CASCADE,
   quizid INTEGER REFERENCES quizzes(quizid) ON DELETE CASCADE,
 
+  -- The raw answer the student submitted
   user_answer TEXT,
-  is_correct BOOLEAN, -- used for mcq questions
 
-  -- Self-assessment
-  marks_awarded INTEGER, -- What student thinks they got
+  -- Used for MCQ (set server-side at submission time)
+  is_correct BOOLEAN,
+
+  -- Marks (marks_awarded is NULL for feynman until AI grading completes)
+  marks_awarded INTEGER,
   marks_available INTEGER,
 
+  -- Grading status: 'graded' for MCQ/short_answer, 'pending'/'failed' for feynman
+  grading_status VARCHAR(20) DEFAULT 'graded' CHECK (
+    grading_status IN ('graded', 'pending', 'failed')
+  ),
+
+  -- Self-assessment
   confidence INTEGER CHECK (confidence BETWEEN 1 AND 5),
-  time_taken INTEGER, -- in seconds
+  time_taken INTEGER,  -- in seconds
   hints_used INTEGER DEFAULT 0,
 
   -- ELO/GLICKO TRACKING (Before/After snapshots)
@@ -277,29 +331,24 @@ CREATE TABLE question_attempts (
   user_elo_after DECIMAL(6,2),
   user_rd_before DECIMAL(6,2),
   user_rd_after DECIMAL(6,2),
-
   question_elo_before DECIMAL(6,2),
   question_elo_after DECIMAL(6,2),
   question_rd_before DECIMAL(6,2),
   question_rd_after DECIMAL(6,2),
 
   -- FSRS-5 SPACED REPETITION
-  fsrs_rating INTEGER CHECK (fsrs_rating BETWEEN 1 AND 4), -- 1=again, 2=hard, 3=good, 4=easy
-  fsrs_interval_days DECIMAL(8,4), -- Days until next review
-  fsrs_stability_before DECIMAL(8,4), -- Memory strength before this attempt
-  fsrs_stability_after DECIMAL(8,4),  -- Memory strength after this attempt
-  fsrs_difficulty_before DECIMAL(4,2), -- User-perceived difficulty (1-10) before
-  fsrs_difficulty_after DECIMAL(4,2),  -- User-perceived difficulty after
+  fsrs_rating INTEGER CHECK (fsrs_rating BETWEEN 1 AND 4),
+  fsrs_interval_days DECIMAL(8,4),
+  fsrs_stability_before DECIMAL(8,4),
+  fsrs_stability_after DECIMAL(8,4),
+  fsrs_difficulty_before DECIMAL(4,2),
+  fsrs_difficulty_after DECIMAL(4,2),
 
-  -- Probability that user would answer the question correctly, calculated using Glicko-2 expectation formula
-  -- Based on user ability vs question difficulty (averaged across all topics if multi-topic question)
-  -- Used for adaptive difficulty targeting and performance analysis
+  -- Probability of success calculated before attempt using Glicko-2 expectation formula
+  expected_success_probability DECIMAL(4,3),
+  question_difficulty INTEGER,
 
-  expected_success_probability DECIMAL(4,3), -- Calculated before attempt using Elo formula
-
-  question_difficulty INTEGER, -- may be redundant
-  is_anchor_attempt BOOLEAN DEFAULT FALSE, -- Was this an anchor question?
-
+  is_anchor_attempt BOOLEAN DEFAULT FALSE,
   attempted_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -308,7 +357,7 @@ CREATE INDEX idx_question_attempts_questionid ON question_attempts(questionid);
 CREATE INDEX idx_question_attempts_userid_questionid ON question_attempts(userid, questionid);
 CREATE INDEX idx_attempts_anchor ON question_attempts(userid, is_anchor_attempt) WHERE is_anchor_attempt = TRUE;
 CREATE INDEX idx_attempts_fsrs_rating ON question_attempts(fsrs_rating);
-
+CREATE INDEX idx_attempts_grading_status ON question_attempts(grading_status) WHERE grading_status = 'pending';
 
 -- =====================================================================================================================================================
 --                                                              TOPIC MASTERY AND USER ANALYTICS
@@ -322,7 +371,7 @@ CREATE TABLE user_topic_mastery (
   -- ELO/GLICKO-2 RATINGS (User ability per topic)
   -- Objective 2a: Difficulty calibrated to user's current ability
   elo_rating DECIMAL(6,2) DEFAULT 1500.00 CHECK (elo_rating BETWEEN 800 AND 2400),
-  glicko_rd DECIMAL(6,2) DEFAULT 350.00 CHECK (glicko_rd BETWEEN 30 AND 350),
+  glicko_rd DECIMAL(6,2) DEFAULT 150.00 CHECK (glicko_rd BETWEEN 30 AND 350),
   glicko_volatility DECIMAL(4,3) DEFAULT 0.060,
   
   -- FSRS-5 PARAMETERS (Spaced repetition scheduling)
@@ -532,6 +581,246 @@ WHERE utm.next_review_date IS NULL OR utm.next_review_date <= NOW() + INTERVAL '
 ORDER BY priority_score DESC;
 
 
+-- =====================================================================================
+-- MIGRATION: user_elo_snapshots
+--
+-- Stores one row per user per calendar day capturing their overall weighted ELO
+-- at the END of that day. Used exclusively by the grade progress chart.
+--
+-- Weighted ELO formula (mirrors dashboard-stats and predicted-grade endpoints):
+--   weighted_elo = SUM(utm.elo_rating * t.exam_weight) / SUM(t.exam_weight)
+--   across all user_topic_mastery rows with a known elo_rating and exam_weight > 0.
+--
+-- Insert policy:
+--   - One row per (userid, snapshot_date). ON CONFLICT DO UPDATE so that multiple
+--     answers on the same day keep overwriting with the latest snapshot, and only
+--     the final state of that day is retained.
+--   - The trigger fires AFTER UPDATE OF elo_rating on user_topic_mastery, so every
+--     time any topic ELO changes the snapshot for today is refreshed.
+-- =====================================================================================
+
+
+-- ─── TABLE ────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS user_elo_snapshots (
+  userid          INTEGER  NOT NULL REFERENCES users(userid) ON DELETE CASCADE,
+  snapshot_date   DATE     NOT NULL DEFAULT CURRENT_DATE,
+  weighted_elo    INTEGER  NOT NULL,                -- whole-number weighted ELO
+  topics_included INTEGER  NOT NULL,                -- how many topics contributed
+  created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+
+  PRIMARY KEY (userid, snapshot_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_elo_snapshots_userid_date
+  ON user_elo_snapshots (userid, snapshot_date ASC);
+
+COMMENT ON TABLE user_elo_snapshots IS
+'Daily overall weighted-ELO snapshots per user.
+One row per (userid, date). Updated on every ELO change that day so the
+row always reflects the end-of-session state. Used by the grade progress chart
+instead of reconstructing history from question_attempts at query time.';
+
+
+-- ─── FUNCTION: upsert today''s snapshot for a given user ─────────────────────
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- PATCH: weighted ELO — only count attempted topics
+--
+-- Problem: onboarding seeds ALL 73 topics into user_topic_mastery with
+-- fsrs_state = 'new'. The weighted average divided by 73 means completing
+-- a quiz of 8 questions barely moves the needle.
+--
+-- Fix: only include topics where fsrs_state != 'new' in the weighted average.
+-- Falls back to the full average if the user has never answered anything yet.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION upsert_elo_snapshot(p_userid INTEGER)
+RETURNS VOID AS $$
+DECLARE
+  v_weighted_elo    DECIMAL(8,4);
+  v_topics_included INTEGER;
+BEGIN
+  SELECT
+    COALESCE(
+      -- Primary: only topics the user has actually attempted
+      NULLIF(
+        SUM(CASE WHEN utm.fsrs_state != 'new' THEN utm.elo_rating * t.exam_weight END)
+          / NULLIF(SUM(CASE WHEN utm.fsrs_state != 'new' THEN t.exam_weight END), 0),
+        NULL
+      ),
+      -- Fallback: all topics (only used before first quiz)
+      SUM(utm.elo_rating * t.exam_weight) / NULLIF(SUM(t.exam_weight), 0)
+    ),
+    COUNT(CASE WHEN utm.fsrs_state != 'new' THEN 1 END)
+  INTO v_weighted_elo, v_topics_included
+  FROM user_topic_mastery utm
+  JOIN topics t ON utm.topicid = t.topicid
+  WHERE utm.userid      = p_userid
+    AND utm.elo_rating IS NOT NULL
+    AND t.exam_weight   > 0;
+
+  IF v_weighted_elo IS NULL THEN
+    RETURN;
+  END IF;
+
+  INSERT INTO user_elo_snapshots (userid, snapshot_date, weighted_elo, topics_included, updated_at)
+  VALUES (
+    p_userid,
+    CURRENT_DATE,
+    ROUND(v_weighted_elo)::INTEGER,
+    v_topics_included,
+    NOW()
+  )
+  ON CONFLICT (userid, snapshot_date) DO UPDATE
+    SET weighted_elo    = ROUND(EXCLUDED.weighted_elo)::INTEGER,
+        topics_included = EXCLUDED.topics_included,
+        updated_at      = NOW();
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION upsert_elo_snapshot(INTEGER) IS
+'Recomputes and upserts today''s weighted-ELO snapshot for the given user.
+Only includes attempted topics (fsrs_state != new) so quiz progress is visible.
+Falls back to all topics before first quiz. Safe to call multiple times per day.';
+
+-- Refresh today''s snapshot for all users so charts update immediately.
+SELECT upsert_elo_snapshot(userid)
+FROM (SELECT DISTINCT userid FROM user_topic_mastery) u;
+
+
+-- ─── TRIGGER: fire after every ELO update on user_topic_mastery ──────────────
+--
+-- Piggybacks on the existing trigger_update_mastery trigger that already fires
+-- AFTER UPDATE OF elo_rating ON user_topic_mastery. We add a separate trigger
+-- so the snapshot logic is fully decoupled and easy to remove/replace.
+
+CREATE OR REPLACE FUNCTION trigger_fn_snapshot_elo()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- NEW.userid is available because this fires on user_topic_mastery row update.
+  -- We call the shared upsert function so the logic lives in one place.
+  PERFORM upsert_elo_snapshot(NEW.userid);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_snapshot_elo ON user_topic_mastery;
+CREATE TRIGGER trigger_snapshot_elo
+  AFTER UPDATE OF elo_rating ON user_topic_mastery
+  FOR EACH ROW
+  EXECUTE FUNCTION trigger_fn_snapshot_elo();
+
+COMMENT ON TRIGGER trigger_snapshot_elo ON user_topic_mastery IS
+'After every per-topic ELO update, refreshes today''s overall weighted-ELO
+snapshot in user_elo_snapshots. Fires once per topic per answer, but the
+upsert is idempotent so multiple fires per day are safe.';
+
+
+-- ─── BACKFILL: populate historical snapshots from question_attempts ───────────
+--
+-- For existing users who answered questions before this table existed,
+-- reconstruct one snapshot per active day using the same carry-forward logic:
+-- for each day, take the last known user_elo_after per topic up to that day,
+-- weight by exam_weight, and insert a snapshot row.
+--
+-- Run once after deploying this migration. Safe to re-run (ON CONFLICT UPDATE).
+
+DO $$
+DECLARE
+  v_row RECORD;
+BEGIN
+  FOR v_row IN
+    WITH active_days AS (
+      SELECT DISTINCT
+        qa.userid,
+        DATE(qa.attempted_at) AS day
+      FROM question_attempts qa
+      WHERE qa.user_elo_after IS NOT NULL
+        AND qa.grading_status = 'graded'
+    ),
+    all_topics_used AS (
+      SELECT DISTINCT
+        qa.userid,
+        qt.topic_code,
+        t.exam_weight,
+        t.topicid
+      FROM question_attempts qa
+      JOIN question_topics qt ON qa.questionid = qt.questionid
+      JOIN topics t ON qt.topic_code = t.topic_code
+      WHERE qa.user_elo_after IS NOT NULL
+        AND t.exam_weight > 0
+    ),
+    daily_weighted AS (
+      SELECT
+        ad.userid,
+        ad.day,
+        -- For each topic, find the last user_elo_after on or before this day
+        -- then compute the weighted average across all topics.
+        ROUND(
+          (SELECT SUM(last_elo.elo * atu.exam_weight)
+                / NULLIF(SUM(atu.exam_weight), 0)
+           FROM all_topics_used atu
+           CROSS JOIN LATERAL (
+             SELECT qa2.user_elo_after AS elo
+             FROM question_attempts qa2
+             JOIN question_topics qt2 ON qa2.questionid = qt2.questionid
+             WHERE qa2.userid        = ad.userid
+               AND qt2.topic_code    = atu.topic_code
+               AND qa2.user_elo_after IS NOT NULL
+               AND qa2.grading_status = 'graded'
+               AND DATE(qa2.attempted_at) <= ad.day
+             ORDER BY qa2.attempted_at DESC
+             LIMIT 1
+           ) last_elo
+           WHERE atu.userid = ad.userid
+          )
+        )::INTEGER AS weighted_elo,
+        (SELECT COUNT(DISTINCT atu.topic_code)
+         FROM all_topics_used atu
+         WHERE atu.userid = ad.userid
+         -- only count topics that had at least one attempt on or before this day
+         AND EXISTS (
+           SELECT 1 FROM question_attempts qa3
+           JOIN question_topics qt3 ON qa3.questionid = qt3.questionid
+           WHERE qa3.userid = ad.userid
+             AND qt3.topic_code = atu.topic_code
+             AND DATE(qa3.attempted_at) <= ad.day
+             AND qa3.grading_status = 'graded'
+         )
+        )::INTEGER AS topics_included
+      FROM active_days ad
+    )
+    SELECT * FROM daily_weighted WHERE weighted_elo IS NOT NULL
+  LOOP
+    INSERT INTO user_elo_snapshots
+      (userid, snapshot_date, weighted_elo, topics_included, created_at, updated_at)
+    VALUES
+      (v_row.userid, v_row.day, v_row.weighted_elo, v_row.topics_included, NOW(), NOW())
+    ON CONFLICT (userid, snapshot_date) DO UPDATE
+      SET weighted_elo    = EXCLUDED.weighted_elo,
+          topics_included = EXCLUDED.topics_included,
+          updated_at      = NOW();
+  END LOOP;
+END $$;
+
+
+-- ─── VERIFY ───────────────────────────────────────────────────────────────────
+
+SELECT
+  userid,
+  COUNT(*)            AS total_snapshots,
+  MIN(snapshot_date)  AS first_day,
+  MAX(snapshot_date)  AS latest_day,
+  MIN(weighted_elo)   AS lowest_elo,
+  MAX(weighted_elo)   AS highest_elo,
+  MAX(weighted_elo) - MIN(weighted_elo) AS total_gain
+FROM user_elo_snapshots
+GROUP BY userid
+ORDER BY userid;
+
+
 COMMENT ON VIEW topics_due_for_review IS
 'Adaptive quiz generation priority scoring using multiplicative model.
 Components:
@@ -714,78 +1003,6 @@ END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
 
-
-
--- =====================================================================================================================================================
---                                                                    TRIGGERS
--- =====================================================================================================================================================
-
--- Auto-update user_progress when questions are answered
-CREATE OR REPLACE FUNCTION update_user_progress()
-RETURNS TRIGGER AS $$
-DECLARE
-  v_last_activity DATE;
-BEGIN
-  -- Get user's last activity date
-  SELECT last_activity_date INTO v_last_activity
-  FROM user_progress
-  WHERE userid = NEW.userid;
-  
-  -- Update streak logic (Objective 11: Daily streak system)
-  IF v_last_activity IS NULL THEN
-    -- First ever activity
-    UPDATE user_progress
-    SET 
-      current_streak = 1,
-      longest_streak = 1,
-      last_activity_date = CURRENT_DATE
-    WHERE userid = NEW.userid;
-    
-  ELSIF v_last_activity = CURRENT_DATE THEN
-    -- Already studied today, no streak change
-    NULL;
-    
-  ELSIF v_last_activity = CURRENT_DATE - INTERVAL '1 day' THEN
-    -- Consecutive day - increment streak
-    UPDATE user_progress
-    SET 
-      current_streak = current_streak + 1,
-      longest_streak = GREATEST(longest_streak, current_streak + 1),
-      last_activity_date = CURRENT_DATE
-    WHERE userid = NEW.userid;
-    
-  ELSE
-    -- Streak broken - reset to 1
-    UPDATE user_progress
-    SET 
-      current_streak = 1,
-      last_activity_date = CURRENT_DATE
-    WHERE userid = NEW.userid;
-  END IF;
-  
-  -- Update stats (always runs) - Objective 4f: Questions answered
-  UPDATE user_progress
-  SET 
-    total_questions_answered = total_questions_answered + 1,
-    total_study_time = total_study_time + COALESCE(NEW.time_taken, 0),
-    total_xp = total_xp + (CASE WHEN NEW.is_correct THEN 15 ELSE 5 END),
-    updated_at = NOW()
-  WHERE userid = NEW.userid;
-  
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trigger_update_user_progress
-AFTER INSERT ON question_attempts
-FOR EACH ROW
-EXECUTE FUNCTION update_user_progress();
-
-
--- =====================================================================================================================================================
---                                    CORE ADAPTIVE ALGORITHM: Auto-update Elo/Glicko-2 ratings and FSRS schedule
--- =====================================================================================================================================================
-
 -- smarter way to calculate FSRS rating from marks and confidence
 -- combines marks and confidence into a single rating adjustment
 CREATE OR REPLACE FUNCTION calculate_fsrs_rating_from_marks(
@@ -830,414 +1047,399 @@ END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
 
+-- =====================================================================================================================================================
+--                                                                    TRIGGERS
+-- =====================================================================================================================================================
 -- =====================================================================================
---                    CORRECTED TRIGGER WITH OBJECTIVE GLICKO-2
+-- PATCH: Add mastery_gap maintenance to update_ratings_and_schedule trigger
+-- 
+-- mastery_gap = topic elo - user's own average elo across all studied topics
+--   Negative → this topic is below the user's average (relatively weak, higher urgency)
+--   Positive → this topic is above the user's average (relatively strong, lower urgency)
+--
+-- Using personal average (not a fixed threshold like 1400) means the score is
+-- self-relative: it identifies which topics are dragging you down compared to
+-- YOUR current level, not compared to an arbitrary grade boundary.
+--
+-- The adaptive priority_score uses mastery_need = GREATEST(0.5, 1.0 + (mastery_gap / -200.0))
+-- so mastery_gap = -200 → mastery_need = 2.0 (this topic 200 pts below your average = urgent)
+--    mastery_gap =   0  → mastery_need = 1.0 (on par with your average)
+--    mastery_gap = +200 → mastery_need = 0.5 (well above average, less urgent)
 -- =====================================================================================
 
--- our smart trigger function that updates both user and question ratings and the FSRS schedule
+-- Step 1: Add the column if it doesn't exist yet
+ALTER TABLE user_topic_mastery
+  ADD COLUMN IF NOT EXISTS mastery_gap DECIMAL(8,2);
+
+-- Step 2: Backfill all existing rows immediately
+UPDATE user_topic_mastery utm
+SET mastery_gap = utm.elo_rating - avg_elo.personal_avg
+FROM (
+  SELECT userid, AVG(elo_rating) AS personal_avg
+  FROM user_topic_mastery
+  WHERE elo_rating IS NOT NULL
+  GROUP BY userid
+) avg_elo
+WHERE utm.userid = avg_elo.userid
+  AND utm.elo_rating IS NOT NULL;
+
+-- Step 3: Replace the trigger function with mastery_gap maintenance added.
+-- Only the UPDATE user_topic_mastery block is changed (inside the per-topic loop).
+-- The rest of the function is identical to the deployed version.
 CREATE OR REPLACE FUNCTION update_ratings_and_schedule()
 RETURNS TRIGGER AS $$
 DECLARE
-  v_topic_record RECORD;
-  v_question_elo DECIMAL(6,2);
-  v_question_rd DECIMAL(6,2);
+  v_question_elo        DECIMAL(6,2);
+  v_question_rd         DECIMAL(6,2);
   v_question_volatility DOUBLE PRECISION;
-  v_question_is_anchor BOOLEAN;
-  v_anchor_grade_level VARCHAR(2);
-  v_new_question_elo DECIMAL(6,2);
-  v_new_question_rd DECIMAL(6,2);
-  v_elo_change DECIMAL(6,2);
-  v_days_since_last_review DECIMAL(8,4);
-  v_now TIMESTAMP := NOW(); -- Single timestamp for consistency
-  
-  -- NEW: Objective performance for Glicko-2 (marks only, no confidence)
-  v_actual_performance DECIMAL(4,3);
-  
-  -- Glicko-2 constants
-  c_glicko_scale CONSTANT DECIMAL := 173.7178; -- 400/ln(10)
-  c_tau CONSTANT DOUBLE PRECISION := 0.5; -- System volatility constant (0.3-1.2 recommended)
-  
-  -- FSRS-5 weights (from research) - NOTE: PostgreSQL arrays are 1-indexed
-  -- Mapping: w[0] -> c_fsrs_w[1], w[1] -> c_fsrs_w[2], etc.
+  v_question_is_anchor  BOOLEAN;
+  v_anchor_grade_level  VARCHAR(2);
+
+  v_question_mu         DECIMAL(8,6);
+  v_question_phi        DECIMAL(8,6);
+  v_question_g          DECIMAL(8,6);
+
+  v_actual_performance  DECIMAL(4,3);
+  v_now                 TIMESTAMP := NOW();
+
+  v_total_elo_change    DECIMAL(8,4) := 0;
+  v_total_expected_E    DECIMAL(8,6) := 0;
+  v_topic_count         INTEGER      := 0;
+
+  v_new_question_elo    DECIMAL(6,2);
+  v_new_question_rd     DECIMAL(6,2);
+  v_elo_change          DECIMAL(6,2);
+
+  _topic                RECORD;
+
+  c_glicko_scale CONSTANT DECIMAL        := 173.7178;
+  c_tau          CONSTANT DOUBLE PRECISION := 0.5;
+
   c_fsrs_w CONSTANT DECIMAL[] := ARRAY[
-    0.4072, 1.1829, 3.1262, 15.4722, -- w[0-3]: initial stability by rating
-    7.2102, 0.5316, 1.0651, 0.0234,  -- w[4-7]: difficulty adjustments
-    1.616, 0.1544, 0.9957, 2.0902,   -- w[8-11]: failed review parameters
-    0.0726, 0.3025, 1.9661, 0.621,   -- w[12-15]: successful review parameters
-    2.9469                            -- w[16]: hard penalty multiplier
+    0.4072, 1.1829,  3.1262, 15.4722,
+    7.2102, 0.5316,  1.0651,  0.0234,
+    1.6160, 0.1544,  0.9957,  2.0902,
+    0.0726, 0.3025,  1.9661,  0.6210,
+    2.9469
   ];
+
   c_fsrs_decay CONSTANT DECIMAL := -0.5;
-  
-  -- FSRS retention target (configurable per user in future)
-  -- 0.9 = 90% retention probability at next review
-  c_target_retention CONSTANT DECIMAL := 0.9;
-  
-  -- Accumulator for multi-topic question rating adjustment
-  v_total_elo_change DECIMAL(8,4) := 0;
-  v_topic_count INTEGER := 0;
-  
-  -- Expected success vs question (calculated once)
-  v_question_expected_score DECIMAL(4,3);
-  v_question_mu DECIMAL(8,6);
-  v_question_phi DECIMAL(8,6);
-  v_question_g DECIMAL(8,6);
+
+  v_fsrs_snapped BOOLEAN := FALSE;
+
 BEGIN
-  -- ========== STEP 1: Get question's current ratings ==========
+  -- STEP 1: Load question metadata
   SELECT elo_rating, glicko_rd, glicko_volatility, is_anchor, anchor_grade_level
-  INTO v_question_elo, v_question_rd, v_question_volatility, v_question_is_anchor, v_anchor_grade_level
-  FROM questions 
-  WHERE questionid = NEW.questionid;
-  
-  -- Store question data in attempt
+  INTO   v_question_elo, v_question_rd, v_question_volatility,
+         v_question_is_anchor, v_anchor_grade_level
+  FROM   questions
+  WHERE  questionid = NEW.questionid;
+
   NEW.question_elo_before := v_question_elo;
-  NEW.question_rd_before := v_question_rd;
-  NEW.is_anchor_attempt := v_question_is_anchor;
-  NEW.question_difficulty := (SELECT difficulty FROM questions WHERE questionid = NEW.questionid);
-  
-  -- Pre-calculate question parameters for expected success (used for all topics)
-  v_question_mu := (v_question_elo - 1500) / c_glicko_scale;
-  v_question_phi := v_question_rd / c_glicko_scale;
-  v_question_g := 1.0 / SQRT(1 + (3 * v_question_phi * v_question_phi) / (PI() * PI()));
-  
-  -- ========== STEP 2: Calculate FSRS rating from marks + confidence ==========
-  -- FSRS uses BOTH marks and confidence (subjective memory strength)
-  -- This is for scheduling reviews based on how well the material is retained
-  
-  IF NEW.marks_available IS NOT NULL AND NEW.marks_awarded IS NOT NULL THEN
-    NEW.fsrs_rating := calculate_fsrs_rating_from_marks(
-      NEW.marks_awarded,
-      NEW.marks_available,
-      NEW.confidence
-    );
-  -- For MCQ questions (is_correct is definitive)
-  ELSIF NEW.is_correct IS NOT NULL THEN
-    NEW.fsrs_rating := CASE 
-      WHEN NOT NEW.is_correct THEN 1
-      WHEN NEW.confidence <= 2 THEN 1
-      WHEN NEW.confidence = 3 THEN 2
-      WHEN NEW.confidence = 4 THEN 3
-      ELSE 4
-    END;
-  -- Fallback (shouldn't happen)
-  ELSE
-    NEW.fsrs_rating := 2;  -- Default to "Hard"
+  NEW.question_rd_before  := v_question_rd;
+  NEW.is_anchor_attempt   := v_question_is_anchor;
+
+  v_question_mu  := (v_question_elo - 1500) / c_glicko_scale;
+  v_question_phi := v_question_rd          / c_glicko_scale;
+  v_question_g   := 1.0 / SQRT(1 + (3 * v_question_phi * v_question_phi) / (PI() * PI()));
+
+  -- STEP 2: Determine FSRS rating
+  IF NEW.grading_status = 'graded' THEN
+    IF NEW.marks_available IS NOT NULL AND NEW.marks_awarded IS NOT NULL THEN
+      NEW.fsrs_rating := calculate_fsrs_rating_from_marks(
+        NEW.marks_awarded, NEW.marks_available, NEW.confidence
+      );
+    ELSIF NEW.is_correct IS NOT NULL THEN
+      NEW.fsrs_rating := CASE
+        WHEN NOT NEW.is_correct               THEN 1
+        WHEN NEW.confidence <= 2              THEN 2
+        WHEN NEW.confidence  = 3              THEN 3
+        WHEN NEW.confidence  = 4              THEN 3
+        ELSE                                       4
+      END;
+    ELSE
+      NEW.fsrs_rating := 2;
+    END IF;
   END IF;
-  
-  -- ========== STEP 2.5: Calculate OBJECTIVE performance for Glicko-2 ==========
-  -- Glicko-2 uses ONLY marks (objective ability estimation)
-  -- Confidence is ignored - we only care about actual performance
-  
+
+  -- STEP 3: Determine objective performance for Glicko-2
+  IF NEW.grading_status != 'graded' THEN
+    NEW.question_elo_after := v_question_elo;
+    NEW.question_rd_after  := v_question_rd;
+    NEW.expected_success_probability := NULL;
+    RETURN NEW;
+  END IF;
+
   v_actual_performance := COALESCE(
-    -- If marks provided, use percentage (self-assessed questions)
     NEW.marks_awarded::DECIMAL / NULLIF(NEW.marks_available, 0),
-    -- If binary is_correct provided, use it (MCQ questions)
-    CASE 
+    CASE
       WHEN NEW.is_correct IS NOT NULL AND NEW.is_correct THEN 1.0
-      WHEN NEW.is_correct IS NOT NULL THEN 0.0
+      WHEN NEW.is_correct IS NOT NULL                    THEN 0.0
       ELSE NULL
     END,
-    0.0  -- Fallback to 0 if neither provided
+    0.0
   );
-  
-  -- Populate is_correct for database consistency (>=75% = correct)
-  IF NEW.is_correct IS NULL AND NEW.marks_available IS NOT NULL THEN
+
+  IF NEW.marks_available IS NOT NULL AND NEW.marks_awarded IS NOT NULL THEN
     NEW.is_correct := (NEW.marks_awarded::DECIMAL / NEW.marks_available) >= 0.75;
   END IF;
-  
-  -- ========== STEP 3: Loop through ALL topics for this question ==========
-  FOR v_topic_record IN 
-    SELECT t.topicid 
-    FROM question_topics qt
-    JOIN topics t ON qt.topic_code = t.topic_code
-    WHERE qt.questionid = NEW.questionid
+
+  -- STEP 4: Guard - exit if no topic mappings
+  IF NOT EXISTS (
+    SELECT 1 FROM question_topics WHERE questionid = NEW.questionid
+  ) THEN
+    NEW.question_elo_after := v_question_elo;
+    NEW.question_rd_after  := v_question_rd;
+    NEW.expected_success_probability := NULL;
+    RETURN NEW;
+  END IF;
+
+  -- STEP 5: Per-topic Glicko-2 + FSRS loop
+  FOR _topic IN
+    SELECT t.topicid
+    FROM   question_topics qt
+    JOIN   topics t ON qt.topic_code = t.topic_code
+    WHERE  qt.questionid = NEW.questionid
   LOOP
     DECLARE
-      v_user_elo DECIMAL(6,2);
-      v_user_rd DECIMAL(6,2);
-      v_user_volatility DOUBLE PRECISION;
-      v_fsrs_stability DECIMAL(8,4);
-      v_fsrs_difficulty DECIMAL(4,2);
-      v_fsrs_state VARCHAR(15);
-      v_last_review TIMESTAMP;
-      v_new_user_elo DECIMAL(6,2);
-      v_new_user_rd DECIMAL(6,2);
+      v_user_elo         DECIMAL(6,2);
+      v_user_rd          DECIMAL(6,2);
+      v_user_volatility  DOUBLE PRECISION;
+      v_fsrs_stability   DECIMAL(8,4);
+      v_fsrs_difficulty  DECIMAL(4,2);
+      v_fsrs_state       VARCHAR(15);
+      v_last_review      TIMESTAMP;
+
+      v_mu               DECIMAL(8,6);
+      v_phi              DECIMAL(8,6);
+      v_sigma            DOUBLE PRECISION;
+      v_E                DECIMAL(8,6);
+      v_v                DOUBLE PRECISION;
+      v_delta            DOUBLE PRECISION;
+      v_phi_star         DECIMAL(8,6);
+      v_new_phi          DECIMAL(8,6);
+      v_new_mu           DECIMAL(8,6);
+      v_new_sigma        DOUBLE PRECISION;
+      v_new_user_elo     DECIMAL(6,2);
+      v_new_user_rd      DECIMAL(6,2);
       v_new_user_volatility DOUBLE PRECISION;
-      v_new_stability DECIMAL(8,4);
-      v_new_difficulty DECIMAL(4,2);
-      v_new_state VARCHAR(15);
-      v_interval_days DECIMAL(8,4);
-      v_retrievability DECIMAL(8,6);
-      
-      -- Glicko-2 variables
-      v_mu DECIMAL(8,6);
-      v_phi DECIMAL(8,6);
-      v_sigma DOUBLE PRECISION;
-      v_E DECIMAL(8,6);
-      v_v DECIMAL(8,6);
-      v_delta DECIMAL(8,6);
-      v_phi_star DECIMAL(8,6);
-      v_new_phi DECIMAL(8,6);
-      v_new_mu DECIMAL(8,6);
-      v_new_sigma DOUBLE PRECISION;
+
+      v_days_elapsed     DECIMAL(8,4);
+      v_retrievability   DECIMAL(8,6);
+      v_new_stability    DECIMAL(8,4);
+      v_new_difficulty   DECIMAL(4,2);
+      v_new_state        VARCHAR(15);
+      v_interval_days    DECIMAL(8,4);
+      v_d0_3             DECIMAL(4,2);
     BEGIN
-      -- Create user_topic_mastery if doesn't exist
       INSERT INTO user_topic_mastery (userid, topicid)
-      VALUES (NEW.userid, v_topic_record.topicid)
+      VALUES (NEW.userid, _topic.topicid)
       ON CONFLICT (userid, topicid) DO NOTHING;
-      
-      -- Get user's current ratings for this topic
-      SELECT 
-        elo_rating, glicko_rd, glicko_volatility, 
-        fsrs_stability, fsrs_difficulty, fsrs_state, last_review_date
-      INTO 
-        v_user_elo, v_user_rd, v_user_volatility,
-        v_fsrs_stability, v_fsrs_difficulty, v_fsrs_state, v_last_review
-      FROM user_topic_mastery
-      WHERE userid = NEW.userid AND topicid = v_topic_record.topicid;
-      
-      -- FIXED: Use NEW.attempted_at instead of v_now for proper spacing calculation
-      v_days_since_last_review := COALESCE(EXTRACT(EPOCH FROM (NEW.attempted_at - v_last_review)) / 86400, 0);
-      
-      -- ========== GLICKO-2 RATING UPDATE ==========
-      -- Uses OBJECTIVE performance only (v_actual_performance)
-      -- Confidence does NOT affect ability estimation
-      
-      -- Convert to Glicko-2 scale
-      v_mu := (v_user_elo - 1500) / c_glicko_scale;
-      v_phi := v_user_rd / c_glicko_scale;
+
+      SELECT elo_rating, glicko_rd, glicko_volatility,
+             fsrs_stability, fsrs_difficulty, fsrs_state, last_review_date
+      INTO   v_user_elo, v_user_rd, v_user_volatility,
+             v_fsrs_stability, v_fsrs_difficulty, v_fsrs_state, v_last_review
+      FROM   user_topic_mastery
+      WHERE  userid = NEW.userid AND topicid = _topic.topicid;
+
+      v_days_elapsed := COALESCE(
+        EXTRACT(EPOCH FROM (NEW.attempted_at - v_last_review)) / 86400.0, 0
+      );
+
+      -- Glicko-2
+      v_mu    := (v_user_elo - 1500) / c_glicko_scale;
+      v_phi   := v_user_rd          / c_glicko_scale;
       v_sigma := v_user_volatility;
-      
-      -- Expected outcome E(µ, µⱼ, φⱼ) using pre-calculated question values
+
       v_E := 1.0 / (1 + EXP(-v_question_g * (v_mu - v_question_mu)));
-      
-      -- Store expected success vs question (once, for primary comparison)
-      IF v_topic_count = 0 THEN
-        v_question_expected_score := v_E;
-      END IF;
-      
-      -- Variance v
-      v_v := 1.0 / (v_question_g * v_question_g * v_E * (1 - v_E));
-      
-      -- Performance difference Δ
-      -- FIX: Use v_actual_performance instead of is_correct
+      v_total_expected_E := v_total_expected_E + v_E;
+
+      v_v     := 1.0 / (v_question_g * v_question_g * v_E * (1 - v_E));
       v_delta := v_v * v_question_g * (v_actual_performance - v_E);
-      
-      -- New volatility using Illinois algorithm (FULL GLICKO-2)
+
       v_new_sigma := calculate_glicko2_volatility(v_phi, v_sigma, v_delta, v_v, c_tau);
-      
-      -- Pre-rating period RD φ*
-      v_phi_star := SQRT(v_phi * v_phi + v_new_sigma * v_new_sigma);
-      
-      -- New RD φ'
-      v_new_phi := 1.0 / SQRT(1.0 / (v_phi_star * v_phi_star) + 1.0 / v_v);
-      
-      -- New rating µ'
-      -- FIX: Use v_actual_performance instead of is_correct
-      v_new_mu := v_mu + v_new_phi * v_new_phi * v_question_g * (v_actual_performance - v_E);
-      
-      -- Convert back to Elo scale
-      v_new_user_elo := c_glicko_scale * v_new_mu + 1500;
-      v_new_user_rd := c_glicko_scale * v_new_phi;
-      v_new_user_volatility := v_new_sigma;
-      
-      -- Clamp to valid ranges
-      v_new_user_elo := GREATEST(800, LEAST(2400, v_new_user_elo));
-      v_new_user_rd := GREATEST(30, LEAST(350, v_new_user_rd));
-      v_new_user_volatility := GREATEST(0.03, LEAST(0.15, v_new_user_volatility));
-      
-      -- Accumulate Elo changes
+      v_phi_star  := SQRT(v_phi * v_phi + v_new_sigma * v_new_sigma);
+      v_new_phi   := 1.0 / SQRT(1.0 / (v_phi_star * v_phi_star) + 1.0 / v_v);
+      v_new_mu    := v_mu + v_new_phi * v_new_phi * v_question_g * (v_actual_performance - v_E);
+
+      v_new_user_elo        := GREATEST(800,  LEAST(2400, c_glicko_scale * v_new_mu  + 1500));
+      v_new_user_rd         := GREATEST(30,   LEAST(350,  c_glicko_scale * v_new_phi       ));
+      v_new_user_volatility := GREATEST(0.03, LEAST(0.15, v_new_sigma                       ));
+
       v_total_elo_change := v_total_elo_change + (v_new_user_elo - v_user_elo);
-      v_topic_count := v_topic_count + 1;
-      
-      -- Store first topic's data in attempt record
+      v_topic_count      := v_topic_count + 1;
+
       IF v_topic_count = 1 THEN
         NEW.user_elo_before := v_user_elo;
-        NEW.user_elo_after := v_new_user_elo;
-        NEW.user_rd_before := v_user_rd;
-        NEW.user_rd_after := v_new_user_rd;
+        NEW.user_elo_after  := v_new_user_elo;
+        NEW.user_rd_before  := v_user_rd;
+        NEW.user_rd_after   := v_new_user_rd;
       END IF;
-      
-      -- ========== FSRS-5 UPDATE ==========
-      
-      NEW.fsrs_stability_before := v_fsrs_stability;
-      NEW.fsrs_difficulty_before := v_fsrs_difficulty;
-      
-      -- Safety guard
+
+      -- FSRS
       v_fsrs_stability := GREATEST(v_fsrs_stability, 0.1);
-      
+
+      IF NOT v_fsrs_snapped THEN
+        NEW.fsrs_stability_before  := v_fsrs_stability;
+        NEW.fsrs_difficulty_before := v_fsrs_difficulty;
+      END IF;
+
       IF v_fsrs_state = 'new' THEN
-        -- Initial stability: w[0-3] -> c_fsrs_w[1-4]
-        v_new_stability := c_fsrs_w[NEW.fsrs_rating];
+        v_new_stability  := c_fsrs_w[NEW.fsrs_rating];
+        v_new_difficulty := c_fsrs_w[5] - (NEW.fsrs_rating - 3) * c_fsrs_w[6];
+        v_new_difficulty := GREATEST(1, LEAST(10, v_new_difficulty));
         v_new_state := CASE WHEN NEW.fsrs_rating = 1 THEN 'learning' ELSE 'review' END;
-        v_new_difficulty := 5.0;
-        
+
       ELSIF NEW.fsrs_rating = 1 THEN
-        -- Failed review: calculate retrievability and reduce stability
-        v_retrievability := POWER(1 + v_days_since_last_review / (9 * v_fsrs_stability), c_fsrs_decay);
-        
-        -- FIXED: Subtraction must be OUTSIDE the multiplication
-        -- Formula: S' = w[7] × D^(-w[8]) × (S+1)^w[9] - 1
-        v_new_stability := c_fsrs_w[9] * POWER(v_fsrs_difficulty, -c_fsrs_w[10]) * 
-                          POWER(v_fsrs_stability + 1, c_fsrs_w[11]) - 1;
-        
-        -- SAFETY: Failed stability should NEVER exceed current stability
-        -- Cap at 50% of previous stability when failing
-        v_new_stability := LEAST(v_new_stability, v_fsrs_stability * 0.5);
-        
-        -- Ensure minimum stability (review within 24 hours for failures)
+        v_retrievability := POWER(1 + v_days_elapsed / (9.0 * v_fsrs_stability), c_fsrs_decay);
+        v_new_stability  :=
+            c_fsrs_w[12]
+          * POWER(v_fsrs_difficulty,   -c_fsrs_w[13])
+          * (POWER(v_fsrs_stability + 1, c_fsrs_w[14]) - 1)
+          * EXP(c_fsrs_w[15] * (1 - v_retrievability));
+        v_new_stability := LEAST(v_new_stability, v_fsrs_stability * 0.9);
         v_new_stability := GREATEST(v_new_stability, 0.1);
-        
-        v_new_state := 'relearning';
-        v_new_difficulty := LEAST(10, v_fsrs_difficulty - c_fsrs_w[8] * (NEW.fsrs_rating - 3));
-        
+        v_new_state := CASE WHEN v_fsrs_state = 'review' THEN 'relearning' ELSE 'learning' END;
+        v_d0_3          := c_fsrs_w[5];
+        v_new_difficulty := v_fsrs_difficulty - c_fsrs_w[7] * (NEW.fsrs_rating - 3);
+        v_new_difficulty := c_fsrs_w[8] * v_d0_3 + (1 - c_fsrs_w[8]) * v_new_difficulty;
+        v_new_difficulty := GREATEST(1, LEAST(10, v_new_difficulty));
+
       ELSE
-        -- Successful review: exponential stability growth
-        v_retrievability := POWER(1 + v_days_since_last_review / (9 * v_fsrs_stability), c_fsrs_decay);
-        
-        -- DEBUG: Log values
-        RAISE NOTICE 'FSRS Growth Debug: days=%, stab=%, R=%, diff=%', 
-          v_days_since_last_review, v_fsrs_stability, v_retrievability, v_fsrs_difficulty;
-        
-        v_new_stability := v_fsrs_stability * (
-          1 + 
-          EXP(c_fsrs_w[12]) * 
-          (11 - v_fsrs_difficulty) * 
-          POWER(v_fsrs_stability, -c_fsrs_w[13]) * 
-          (EXP((1 - v_retrievability) * c_fsrs_w[14]) - 1) *
-          CASE WHEN NEW.fsrs_rating = 2 THEN c_fsrs_w[17] ELSE 1 END
+        v_retrievability := POWER(1 + v_days_elapsed / (9.0 * v_fsrs_stability), c_fsrs_decay);
+        v_new_stability  := v_fsrs_stability * (
+          1 + EXP(c_fsrs_w[9]) * (11 - v_fsrs_difficulty)
+            * POWER(v_fsrs_stability, -c_fsrs_w[10])
+            * (EXP((1 - v_retrievability) * c_fsrs_w[11]) - 1)
+            * CASE
+                WHEN NEW.fsrs_rating = 2 THEN c_fsrs_w[16]
+                WHEN NEW.fsrs_rating = 4 THEN c_fsrs_w[17]
+                ELSE 1
+              END
         );
-        
-        RAISE NOTICE 'FSRS Growth Debug: new_stab=%', v_new_stability;
-        
-        v_new_state := CASE 
+        v_new_state := CASE
           WHEN v_fsrs_state IN ('learning', 'relearning') AND NEW.fsrs_rating >= 3 THEN 'review'
           ELSE v_fsrs_state
         END;
-        
-        v_new_difficulty := GREATEST(1, LEAST(10, 
-          v_fsrs_difficulty - c_fsrs_w[8] * (NEW.fsrs_rating - 3)
-        ));
+        v_d0_3          := c_fsrs_w[5];
+        v_new_difficulty := v_fsrs_difficulty - c_fsrs_w[7] * (NEW.fsrs_rating - 3);
+        v_new_difficulty := c_fsrs_w[8] * v_d0_3 + (1 - c_fsrs_w[8]) * v_new_difficulty;
+        v_new_difficulty := GREATEST(1, LEAST(10, v_new_difficulty));
       END IF;
-      
-      -- FSRS-5 stability is ALREADY "days until 90% retention"
-      v_interval_days := v_new_stability;
-      
-      -- Clamp to reasonable bounds
-      v_interval_days := GREATEST(0.1, LEAST(36500, v_interval_days));
-      
-      NEW.fsrs_stability_after := v_new_stability;
-      NEW.fsrs_difficulty_after := v_new_difficulty;
-      NEW.fsrs_interval_days := v_interval_days;
-      
-      -- ========== Update user_topic_mastery ==========
+
+      v_interval_days := GREATEST(1, LEAST(36500,
+        ROUND(v_new_stability * (POWER(0.9, 1.0 / c_fsrs_decay) - 1) * 9.0)
+      ));
+
+      IF NOT v_fsrs_snapped THEN
+        NEW.fsrs_stability_after  := v_new_stability;
+        NEW.fsrs_difficulty_after := v_new_difficulty;
+        NEW.fsrs_interval_days    := v_interval_days;
+        v_fsrs_snapped := TRUE;
+      END IF;
+
+      -- ── Persist mastery row ─────────────────────────────────────────────────────
       UPDATE user_topic_mastery SET
-        -- Update Elo/Glicko-2 ratings
-        elo_rating = v_new_user_elo,
-        glicko_rd = v_new_user_rd,
-        glicko_volatility = v_new_user_volatility,
-        
-        -- Update FSRS scheduling
-        fsrs_stability = v_new_stability,
-        fsrs_difficulty = v_new_difficulty,
-        fsrs_state = v_new_state,
-        -- FIXED: Use NEW.attempted_at instead of v_now for proper date tracking
-        last_review_date = NEW.attempted_at,
-        next_review_date = NEW.attempted_at + (v_interval_days || ' days')::INTERVAL,
-        
-        -- Update performance counters
+        elo_rating         = v_new_user_elo,
+        glicko_rd          = v_new_user_rd,
+        glicko_volatility  = v_new_user_volatility,
+
+        -- mastery_gap = this topic's new ELO minus the user's current average ELO
+        -- across all topics they have studied. Recomputed live on every answer so the
+        -- adaptive algorithm always has an accurate picture of relative weaknesses.
+        mastery_gap        = v_new_user_elo - (
+          SELECT AVG(elo_rating)
+          FROM user_topic_mastery
+          WHERE userid = NEW.userid
+            AND elo_rating IS NOT NULL
+        ),
+
+        fsrs_stability     = v_new_stability,
+        fsrs_difficulty    = v_new_difficulty,
+        fsrs_state         = v_new_state,
+        last_review_date   = NEW.attempted_at,
+        next_review_date   = NEW.attempted_at + (v_interval_days || ' days')::INTERVAL,
+
         total_study_time_seconds = total_study_time_seconds + COALESCE(NEW.time_taken, 0),
-        
-        -- Track anchor attempts separately
+
         anchor_attempts_total = CASE
           WHEN v_question_is_anchor THEN anchor_attempts_total + 1
           ELSE anchor_attempts_total
         END,
-        
-        -- Update anchor tracking with grade-specific stats
         anchor_attempts_by_grade = CASE
           WHEN v_question_is_anchor THEN
             jsonb_set(
               COALESCE(anchor_attempts_by_grade, '{}'::jsonb),
               ARRAY[v_anchor_grade_level],
               jsonb_build_object(
-                'attempts', 
+                'attempts',
                 COALESCE((anchor_attempts_by_grade->v_anchor_grade_level->>'attempts')::int, 0) + 1,
                 'correct',
-                COALESCE((anchor_attempts_by_grade->v_anchor_grade_level->>'correct')::int, 0) + 
-                  (CASE WHEN NEW.is_correct THEN 1 ELSE 0 END)
+                COALESCE((anchor_attempts_by_grade->v_anchor_grade_level->>'correct')::int, 0)
+                  + (CASE WHEN NEW.is_correct THEN 1 ELSE 0 END)
               ),
               true
             )
           ELSE anchor_attempts_by_grade
         END,
-        
+
         updated_at = v_now
-      WHERE userid = NEW.userid AND topicid = v_topic_record.topicid;
-      
+      WHERE userid  = NEW.userid
+        AND topicid = _topic.topicid;
     END;
   END LOOP;
-  
-  -- Store expected success probability (vs question, not topic-specific)
-  NEW.expected_success_probability := v_question_expected_score;
-  
-  -- ========== Update question stats (SKIP if anchor!) ==========
-  IF NOT v_question_is_anchor THEN
-    -- Use AVERAGE of Elo changes across all topics
-    v_elo_change := v_total_elo_change / GREATEST(v_topic_count, 1);
-    v_new_question_elo := GREATEST(800, LEAST(2400, v_question_elo - v_elo_change * 0.5));
-    v_new_question_rd := GREATEST(30, v_question_rd - 2);
-    
-    UPDATE questions SET
-      elo_rating = v_new_question_elo,
-      glicko_rd = v_new_question_rd,
-      glicko_volatility = GREATEST(0.03, v_question_volatility * 0.99),
-      attempts_count = attempts_count + 1,
-      correct_count = correct_count + (CASE WHEN NEW.is_correct THEN 1 ELSE 0 END),
-      
-      -- Update average time (running average)
-      avg_time_seconds = ROUND(
-        (COALESCE(avg_time_seconds, 0) * attempts_count + COALESCE(NEW.time_taken, 0))
-        / (attempts_count + 1)
-      ),
-      
-      updated_at = v_now
-    WHERE questionid = NEW.questionid;
-    
-    NEW.question_elo_after := v_new_question_elo;
-    NEW.question_rd_after := v_new_question_rd;
+
+  -- STEP 6: Store average expected success probability
+  NEW.expected_success_probability := CASE
+    WHEN v_topic_count > 0 THEN v_total_expected_E / v_topic_count
+    ELSE NULL
+  END;
+
+  -- STEP 7: Update question ratings (skip anchors)
+  IF NOT v_question_is_anchor AND v_topic_count > 0 THEN
+    DECLARE
+      v_current_attempts INTEGER;
+    BEGIN
+      SELECT attempts_count INTO v_current_attempts
+      FROM   questions WHERE questionid = NEW.questionid;
+
+      v_elo_change       := v_total_elo_change / v_topic_count;
+      v_new_question_elo := GREATEST(800, LEAST(2400, v_question_elo - v_elo_change * 0.5));
+      v_new_question_rd  := GREATEST(
+        30,
+        v_question_rd * (1 - GREATEST(0.02, 0.20 * EXP(-0.3 * v_current_attempts)))
+      );
+
+      UPDATE questions SET
+        elo_rating        = v_new_question_elo,
+        glicko_rd         = v_new_question_rd,
+        glicko_volatility = GREATEST(0.03, v_question_volatility * 0.99),
+        attempts_count    = attempts_count + 1,
+        correct_count     = correct_count + (CASE WHEN NEW.is_correct THEN 1 ELSE 0 END),
+        avg_time_seconds  = ROUND(
+          (COALESCE(avg_time_seconds, 0) * attempts_count + COALESCE(NEW.time_taken, 0))
+          / (attempts_count + 1)
+        ),
+        updated_at        = v_now
+      WHERE questionid = NEW.questionid;
+
+      NEW.question_elo_after := v_new_question_elo;
+      NEW.question_rd_after  := v_new_question_rd;
+    END;
   ELSE
-    -- Anchor: no Elo change
     NEW.question_elo_after := v_question_elo;
-    NEW.question_rd_after := v_question_rd;
+    NEW.question_rd_after  := v_question_rd;
   END IF;
-  
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION update_ratings_and_schedule IS 
-'Core adaptive learning algorithm combining:
-- Full Glicko-2 rating system for OBJECTIVE ability estimation (marks only)
-- FSRS-5 spaced repetition using SUBJECTIVE memory strength (marks + confidence)
-- Multi-topic mastery tracking
-- Anchor-based grade calibration
 
-Key design decisions:
-1. Glicko-2 uses objective performance only (confidence ignored)
-2. FSRS uses both marks and confidence (metacognitive monitoring)
-3. This separation reflects: Glicko = what you CAN do, FSRS = what you WILL REMEMBER
-4. FSRS stability = days to 90% retention (no additional scaling)
-5. Expected success probability = user ability vs question difficulty
-6. Question rating = inverse average of all topic rating changes
-7. Anchor questions never update ratings (stable grade boundaries)
-
-Academic justification:
-- Glicko-2 estimates ground truth ability (objective)
-- FSRS predicts retention probability (subjective + objective)
-- Confidence modulates review timing but not ability estimates
-- Consistent with metacognitive monitoring theory (Koriat & Bjork, 2005)';
-
--- Apply the trigger
+-- ==========================================================================================================================================================================================================================================
+-- Re-attach trigger
+-- ==========================================================================================================================================================================================================================================
 DROP TRIGGER IF EXISTS trigger_update_ratings ON question_attempts;
 CREATE TRIGGER trigger_update_ratings
 BEFORE INSERT ON question_attempts
@@ -1375,3 +1577,150 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Run test with: SELECT * FROM test_glicko2_example();
+
+
+-- =====================================================================================
+-- MASTERY COMPONENT
+-- =====================================================================================
+-- Adds 3 columns to track relative topic weakness
+-- Auto-updates via trigger when Elo changes
+
+-- =====================================================================================
+-- STEP 1: Add columns (one-time migration)
+-- =====================================================================================
+
+ALTER TABLE user_topic_mastery
+ADD COLUMN IF NOT EXISTS mastery_gap DECIMAL(6,2),
+ADD COLUMN IF NOT EXISTS mastery_z_score DECIMAL(4,2),
+ADD COLUMN IF NOT EXISTS mastery_category VARCHAR(20);
+
+
+-- =====================================================================================
+-- STEP 2: Auto-update trigger (runs after every question attempt)
+-- =====================================================================================
+
+CREATE OR REPLACE FUNCTION trigger_update_mastery_after_attempt()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- Recalculate mastery for this user only
+  WITH user_baseline AS (
+    SELECT 
+      userid,
+      AVG(elo_rating) AS avg_elo,
+      STDDEV(elo_rating) AS elo_stddev
+    FROM user_topic_mastery
+    WHERE userid = NEW.userid
+      AND fsrs_state != 'new'
+      AND elo_rating IS NOT NULL
+    GROUP BY userid
+    HAVING COUNT(*) >= 2  -- Need at least 2 topics
+  )
+  UPDATE user_topic_mastery utm
+  SET 
+    mastery_gap = utm.elo_rating - ub.avg_elo,
+    mastery_z_score = 
+      CASE 
+        WHEN ub.elo_stddev > 0 THEN 
+          ROUND(((utm.elo_rating - ub.avg_elo) / ub.elo_stddev)::numeric, 2)
+        ELSE 0
+      END,
+    mastery_category = 
+      CASE 
+        WHEN ub.elo_stddev = 0 THEN 'Competent'
+        WHEN (utm.elo_rating - ub.avg_elo) / ub.elo_stddev < -1.5 THEN 'Struggling'
+        WHEN (utm.elo_rating - ub.avg_elo) / ub.elo_stddev < -0.5 THEN 'Developing'
+        WHEN (utm.elo_rating - ub.avg_elo) / ub.elo_stddev < 0.5 THEN 'Competent'
+        WHEN (utm.elo_rating - ub.avg_elo) / ub.elo_stddev < 1.5 THEN 'Proficient'
+        ELSE 'Mastered'
+      END
+  FROM user_baseline ub
+  WHERE utm.userid = NEW.userid
+    AND utm.fsrs_state != 'new';
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Apply trigger
+DROP TRIGGER IF EXISTS trigger_update_mastery ON user_topic_mastery;
+CREATE TRIGGER trigger_update_mastery
+AFTER UPDATE OF elo_rating ON user_topic_mastery
+FOR EACH ROW
+EXECUTE FUNCTION trigger_update_mastery_after_attempt();
+
+
+-- =====================================================================================
+-- STEP 3: Initialize for existing users (run once)
+-- =====================================================================================
+
+DO $$
+DECLARE
+  v_user RECORD;
+BEGIN
+  FOR v_user IN (SELECT DISTINCT userid FROM user_topic_mastery)
+  LOOP
+    WITH user_baseline AS (
+      SELECT 
+        AVG(elo_rating) AS avg_elo,
+        STDDEV(elo_rating) AS elo_stddev
+      FROM user_topic_mastery
+      WHERE userid = v_user.userid
+        AND fsrs_state != 'new'
+      HAVING COUNT(*) >= 2
+    )
+    UPDATE user_topic_mastery utm
+    SET 
+      mastery_gap = utm.elo_rating - ub.avg_elo,
+      mastery_z_score = 
+        CASE 
+          WHEN ub.elo_stddev > 0 THEN 
+            ROUND(((utm.elo_rating - ub.avg_elo) / ub.elo_stddev)::numeric, 2)
+          ELSE 0
+        END,
+      mastery_category = 
+        CASE 
+          WHEN ub.elo_stddev = 0 THEN 'Competent'
+          WHEN (utm.elo_rating - ub.avg_elo) / ub.elo_stddev < -1.5 THEN 'Struggling'
+          WHEN (utm.elo_rating - ub.avg_elo) / ub.elo_stddev < -0.5 THEN 'Developing'
+          WHEN (utm.elo_rating - ub.avg_elo) / ub.elo_stddev < 0.5 THEN 'Competent'
+          WHEN (utm.elo_rating - ub.avg_elo) / ub.elo_stddev < 1.5 THEN 'Proficient'
+          ELSE 'Mastered'
+        END
+    FROM user_baseline ub
+    WHERE utm.userid = v_user.userid
+      AND utm.fsrs_state != 'new';
+  END LOOP;
+END $$;
+
+-- Verify it worked
+SELECT 
+  COUNT(*) AS total_topics,
+  COUNT(mastery_gap) AS with_mastery,
+  COUNT(*) FILTER (WHERE mastery_category = 'Struggling') AS struggling,
+  COUNT(*) FILTER (WHERE mastery_category = 'Developing') AS developing,
+  COUNT(*) FILTER (WHERE mastery_category = 'Competent') AS competent,
+  COUNT(*) FILTER (WHERE mastery_category = 'Proficient') AS proficient,
+  COUNT(*) FILTER (WHERE mastery_category = 'Mastered') AS mastered
+FROM user_topic_mastery
+WHERE fsrs_state != 'new';
+
+
+
+-- =====================================================================================
+--  ONBOARDING MIGRATION
+--  Adds is_onboarded flag to users table so the app can redirect new users
+--  through the grade/topic calibration wizard before reaching the dashboard.
+-- =====================================================================================
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS is_onboarded BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Existing users who already have topic mastery rows are considered onboarded
+UPDATE users u
+SET is_onboarded = TRUE
+WHERE EXISTS (
+  SELECT 1 FROM user_topic_mastery utm WHERE utm.userid = u.userid
+);
+
+-- Index for fast lookup on login
+CREATE INDEX IF NOT EXISTS idx_users_is_onboarded ON users(userid) WHERE is_onboarded = FALSE;

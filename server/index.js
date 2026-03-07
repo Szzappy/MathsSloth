@@ -11,6 +11,7 @@ import quizRoutes from "./routes/quizRoutes.js";
 import path from "path";
 import passport from "passport";
 import "./config/passport.js";
+import analyticsRoutes from "./routes/analyticsRoutes.js";
 
 const app = express();
 
@@ -53,6 +54,7 @@ app.use("/auth", authLimiter, authRoutes);
 app.use("/dashboard", dashboardRoutes);
 app.use("/images", express.static(path.join(process.cwd(), "images")));
 app.use("/quiz", quizRoutes);
+app.use("/analytics", analyticsRoutes);
 
 app.use(passport.initialize());
 app.use(passport.session());

@@ -47,47 +47,183 @@ const transporter = nodemailer.createTransport({
 const sendVerificationEmail = async (email, token) => {
   const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
 
-  const mailOptions = {
+  const emailVerificationMailOptions = {
     from: `"${process.env.APP_NAME || 'Maths Sloth'}" <${process.env.SMTP_USER}>`,
     to: email,
-    subject: `Verify your Email Address`,
+    subject: `Verify Your Email Address - Maths Sloth`,
     html: `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h1 style="color: #333;">Email Verification</h1>
-        <p>Thank you for registering! Please click the link below to verify your email:</p>
-        <a href="${verificationUrl}" style="display: inline-block; padding: 12px 24px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px; margin: 16px 0;">Verify Email</a>
-        <p>Or copy and paste this link into your browser:</p>
-        <p style="color: #666; word-break: break-all;">${verificationUrl}</p>
-        <p style="color: #666; font-size: 14px;">This link will expire in 24 hours.</p>
-        <p style="color: #666; font-size: 14px;">If you didn't create an account, please ignore this email.</p>
-      </div>
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="margin: 0; padding: 0; background-color: #1a1a1a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #1a1a1a; padding: 40px 20px;">
+          <tr>
+            <td align="center">
+              <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #2d2d2d; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);">
+                
+                <!-- Header -->
+                <tr>
+                  <td style="padding: 40px 40px 20px 40px; text-align: center;">
+                    <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: bold;">🦥 Maths Sloth</h1>
+                  </td>
+                </tr>
+                
+                <!-- Content -->
+                <tr>
+                  <td style="padding: 0 40px 40px 40px;">
+                    <h2 style="margin: 0 0 16px 0; color: #ffffff; font-size: 24px; font-weight: 600;">Welcome to the Troop!</h2>
+                    
+                    <p style="margin: 0 0 24px 0; color: #d1d5db; font-size: 16px; line-height: 1.6;">
+                      Thank you for joining Maths Sloth! We're excited to have you on board. 
+                    </p>
+                    
+                    <p style="margin: 0 0 24px 0; color: #d1d5db; font-size: 16px; line-height: 1.6;">
+                      To get started, please verify your email address by clicking the button below:
+                    </p>
+                    
+                    <!-- Button -->
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td align="center" style="padding: 0 0 24px 0;">
+                          <a href="${verificationUrl}" style="display: inline-block; padding: 14px 32px; background-color: #10b981; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">Verify Email Address</a>
+                        </td>
+                      </tr>
+                    </table>
+                    
+                    <!-- Alternative Link -->
+                    <div style="background-color: #1a1a1a; border: 1px solid #404040; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+                      <p style="margin: 0 0 8px 0; color: #9ca3af; font-size: 14px;">Or copy and paste this link into your browser:</p>
+                      <p style="margin: 0; color: #10b981; font-size: 14px; word-break: break-all;">
+                        <a href="${verificationUrl}" style="color: #10b981; text-decoration: none;">${verificationUrl}</a>
+                      </p>
+                    </div>
+                    
+                    <!-- Info Box -->
+                    <div style="border-left: 4px solid #10b981; background-color: #1a1a1a; padding: 12px 16px; border-radius: 4px; margin-bottom: 16px;">
+                      <p style="margin: 0; color: #86efac; font-size: 14px; line-height: 1.5;">
+                        ✓ <strong>This link will expire in 24 hours.</strong>
+                      </p>
+                    </div>
+                    
+                    <p style="margin: 0; color: #9ca3af; font-size: 14px; line-height: 1.6;">
+                      If you didn't create an account with Maths Sloth, you can safely ignore this email.
+                    </p>
+                  </td>
+                </tr>
+                
+                <!-- Footer -->
+                <tr>
+                  <td style="padding: 20px 40px; background-color: #1a1a1a; border-top: 1px solid #404040;">
+                    <p style="margin: 0; color: #6b7280; font-size: 12px; text-align: center;">
+                      © ${new Date().getFullYear()} Maths Sloth. All rights reserved.
+                    </p>
+                  </td>
+                </tr>
+                
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
     `
   };
 
-  await transporter.sendMail(mailOptions);
+  await transporter.sendMail(emailVerificationMailOptions);
 }
 
 const sendResetPasswordEmail = async (email, token) => {
   const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
 
-  const mailOptions = {
+  const passwordResetMailOptions = {
     from: `"${process.env.APP_NAME || 'Maths Sloth'}" <${process.env.SMTP_USER}>`,
     to: email,
-    subject: `Reset Your Password`,
+    subject: `Reset Your Password - Maths Sloth`,
     html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h1 style="color: #333;">Password Reset</h1>
-        <p>To reset your password, please click the link below:</p>
-        <a href="${resetUrl}" style="display: inline-block; padding: 12px 24px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px; margin: 16px 0;">Reset Password</a>
-        <p>Or copy and paste this link into your browser:</p>
-        <p style="color: #666; word-break: break-all;">${resetUrl}</p>
-        <p style="color: #666; font-size: 14px;">This link will expire in 10 minutes.</p>
-        <p style="color: #666; font-size: 14px;">If you didn't request a password reset, please ignore this email.</p>
-      </div>
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="margin: 0; padding: 0; background-color: #1a1a1a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #1a1a1a; padding: 40px 20px;">
+          <tr>
+            <td align="center">
+              <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #2d2d2d; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);">
+                
+                <!-- Header -->
+                <tr>
+                  <td style="padding: 40px 40px 20px 40px; text-align: center;">
+                    <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: bold;">🦥 Maths Sloth</h1>
+                  </td>
+                </tr>
+                
+                <!-- Content -->
+                <tr>
+                  <td style="padding: 0 40px 40px 40px;">
+                    <h2 style="margin: 0 0 16px 0; color: #ffffff; font-size: 24px; font-weight: 600;">Reset Your Password</h2>
+                    
+                    <p style="margin: 0 0 24px 0; color: #d1d5db; font-size: 16px; line-height: 1.6;">
+                      The sloth forgot their password? Happens to the best of us. Let's get you back in!
+                    </p>
+                    
+                    <p style="margin: 0 0 24px 0; color: #d1d5db; font-size: 16px; line-height: 1.6;">
+                      Click the button below to reset your password:
+                    </p>
+                    
+                    <!-- Button -->
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td align="center" style="padding: 0 0 24px 0;">
+                          <a href="${resetUrl}" style="display: inline-block; padding: 14px 32px; background-color: #10b981; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">Reset Password</a>
+                        </td>
+                      </tr>
+                    </table>
+                    
+                    <!-- Alternative Link -->
+                    <div style="background-color: #1a1a1a; border: 1px solid #404040; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+                      <p style="margin: 0 0 8px 0; color: #9ca3af; font-size: 14px;">Or copy and paste this link into your browser:</p>
+                      <p style="margin: 0; color: #10b981; font-size: 14px; word-break: break-all;">
+                        <a href="${resetUrl}" style="color: #10b981; text-decoration: none;">${resetUrl}</a>
+                      </p>
+                    </div>
+                    
+                    <!-- Warning -->
+                    <div style="border-left: 4px solid #f59e0b; background-color: #1a1a1a; padding: 12px 16px; border-radius: 4px; margin-bottom: 16px;">
+                      <p style="margin: 0; color: #fde68a; font-size: 14px; line-height: 1.5;">
+                        ⏰ <strong>This link will expire in 10 minutes.</strong>
+                      </p>
+                    </div>
+                    
+                    <p style="margin: 0; color: #9ca3af; font-size: 14px; line-height: 1.6;">
+                      If you didn't request a password reset, you can safely ignore this email. Your password will not be changed.
+                    </p>
+                  </td>
+                </tr>
+                
+                <!-- Footer -->
+                <tr>
+                  <td style="padding: 20px 40px; background-color: #1a1a1a; border-top: 1px solid #404040;">
+                    <p style="margin: 0; color: #6b7280; font-size: 12px; text-align: center;">
+                      © ${new Date().getFullYear()} Maths Sloth. All rights reserved.
+                    </p>
+                  </td>
+                </tr>
+                
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
     `
   };
 
-  await transporter.sendMail(mailOptions);
+  await transporter.sendMail(passwordResetMailOptions);
 }
 
 // REGISTER ROUTE
@@ -202,9 +338,11 @@ router.get("/email/verify", async (req, res) => {
       
     // generate jwt token
     const jwtToken = jwtGenerator(user.rows[0].userid, false);
+    // ── NEW: include is_onboarded so the frontend can route correctly ──
     res.json({
       message: "Email verified successfully",
-      token: jwtToken
+      token: jwtToken,
+      is_onboarded: user.rows[0].is_onboarded ?? false,
     });
 
   } catch (error) {
@@ -294,7 +432,6 @@ router.post("/login", validCredentials, async (req, res) => {
       return res.status(403).json({ 
         error: "Please verify your email before logging in",
         needsVerification: true
-        // Remove email from response to avoid revealing it's registered
       });
     }
 
@@ -307,7 +444,12 @@ router.post("/login", validCredentials, async (req, res) => {
 
     // Generate token on successful login
     const token = jwtGenerator(user.rows[0].userid, rememberMe);
-    res.json({ token: token, username: user.rows[0].username.length > 25 ? user.rows[0].username.substring(0, 25) + "..." : user.rows[0].username });
+    // ── NEW: include is_onboarded so the frontend can route correctly ──
+    res.json({
+      token,
+      username: user.rows[0].username.length > 25 ? user.rows[0].username.substring(0, 25) + "..." : user.rows[0].username,
+      is_onboarded: user.rows[0].is_onboarded ?? false,
+    });
 
   } catch (error) {
     console.error("Login error:", error.message);
@@ -405,6 +547,112 @@ router.post("/password/reset", validCredentials, async (req, res) => {
   } catch (error) {
     console.error(error.message);
     res.status(500).json("Internal Server Error");
+  }
+});
+
+// ── NEW: /auth/me ─────────────────────────────────────────────────────────────
+// Used by OAuthSuccess to get username + is_onboarded after Google login,
+// since the OAuth callback can only pass a token in the redirect URL.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/me", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+      return res.status(401).json({ error: "No token provided" });
+    }
+
+    const token = authHeader.slice(7);
+
+    let userid;
+    try {
+      const jwt = await import('jsonwebtoken');
+      const decoded = jwt.default.verify(token, process.env.JWT_SECRET);
+      userid = decoded.userid ?? decoded.id ?? decoded.sub ?? decoded.user;
+    } catch {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+
+    if (!userid) return res.status(401).json({ error: "Invalid token payload" });
+
+    const result = await pool.query(
+      `SELECT username, is_onboarded FROM users WHERE userid = $1`,
+      [userid]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({
+      userid,
+      username:     result.rows[0].username,
+      is_onboarded: result.rows[0].is_onboarded ?? false,
+    });
+  } catch (error) {
+    console.error("Error in /auth/me:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// ── NEW: /auth/onboarding ─────────────────────────────────────────────────────
+// Seeds user_topic_mastery for every topic at the user's chosen grade ELO.
+// Strong topics get +100, weak topics get -100. ON CONFLICT only updates
+// rows still in 'new' state so real quiz data is never overwritten.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post("/onboarding", async (req, res) => {
+  try {
+    const { userid, grade, grade_center_elo, topic_adjustments = [] } = req.body;
+
+    if (!userid || !grade || grade_center_elo == null) {
+      return res.status(400).json({ error: "userid, grade and grade_center_elo are required" });
+    }
+
+    const center = parseInt(grade_center_elo);
+
+    // Build topic_code → elo map from the user's strong/weak selections
+    const adjustmentMap = {};
+    for (const adj of topic_adjustments) {
+      adjustmentMap[adj.topic_code] = adj.strength === 'strong'
+        ? center + 100
+        : center - 100;
+    }
+
+    // Seed every topic — unmentioned ones get center ELO
+    const topicsResult = await pool.query(`SELECT topicid, topic_code FROM topics`);
+
+    // Pre-compute all ELOs so we can set mastery_gap = elo - personal_average.
+    // mastery_gap drives the adaptive quiz priority formula; without it every
+    // topic gets priority_score = NULL and the quiz generates nothing.
+    const allElos = topicsResult.rows.map(t =>
+      Math.max(800, Math.min(2400, adjustmentMap[t.topic_code] ?? center))
+    );
+    const avgElo = allElos.reduce((a, b) => a + b, 0) / allElos.length;
+
+    for (const topic of topicsResult.rows) {
+      const elo = Math.max(800, Math.min(2400, adjustmentMap[topic.topic_code] ?? center));
+      const masteryGap = elo - avgElo;
+      await pool.query(`
+        INSERT INTO user_topic_mastery (
+          userid, topicid,
+          elo_rating, glicko_rd, glicko_volatility,
+          fsrs_state, fsrs_stability, fsrs_difficulty,
+          mastery_gap
+        )
+        VALUES ($1, $2, $3, 200, 0.06, 'new', 1.0, 5.0, $4)
+        ON CONFLICT (userid, topicid) DO UPDATE
+          SET elo_rating = EXCLUDED.elo_rating,
+              mastery_gap = EXCLUDED.mastery_gap
+          WHERE user_topic_mastery.fsrs_state = 'new'
+      `, [userid, topic.topicid, elo, masteryGap]);
+    }
+
+    // Mark user as onboarded so they won't be redirected to the wizard again
+    await pool.query(`UPDATE users SET is_onboarded = TRUE WHERE userid = $1`, [userid]);
+
+    res.json({ message: "Onboarding complete", topics_initialised: topicsResult.rows.length });
+  } catch (error) {
+    console.error("Onboarding error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
