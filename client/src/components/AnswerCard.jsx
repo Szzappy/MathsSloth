@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuiz } from '../contexts/QuizContext.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
 
@@ -48,7 +48,8 @@ function NextButton({ onClick, label = '→ Next Question' }) {
 // BUG FIX: answerResult now stores user_answer directly (not nested under .answer)
 // so we check answerResult.user_answer instead of answerResult.answer.user_answer
 function MCQResult({ answerResult, quiz, currentQuestion, nextQuestion, hasParts, currentPart }) {
-  const { renderQuestionWithMaths } = useQuiz();
+  const { renderQuestionWithMaths, reportSillyMistake } = useQuiz();
+  const [sillyDone, setSillyDone] = useState(false);
 
   const activeQ = hasParts()
     ? quiz[currentQuestion - 1]?.parts[currentPart]
@@ -56,6 +57,11 @@ function MCQResult({ answerResult, quiz, currentQuestion, nextQuestion, hasParts
 
   const options = activeQ?.answer_options?.options || [];
   const isLastPart = !hasParts() || currentPart >= (quiz[currentQuestion - 1]?.parts?.length ?? 1) - 1;
+
+  const handleSillyMistake = async () => {
+    await reportSillyMistake();
+    setSillyDone(true);
+  };
 
   return (
     <div style={card}>
@@ -129,6 +135,51 @@ function MCQResult({ answerResult, quiz, currentQuestion, nextQuestion, hasParts
         </span>
       </div>
 
+      {/* Silly mistake button — only shown when wrong */}
+      {!answerResult?.is_correct && (
+        <div style={{ marginTop: '16px' }}>
+          {sillyDone ? (
+            <div style={{
+              padding: '12px 16px',
+              backgroundColor: '#1c1a10',
+              border: '1px solid #ca8a0444',
+              borderRadius: '8px',
+              color: '#fbbf24',
+              fontSize: '13px',
+              textAlign: 'center',
+            }}>
+              🤦 Noted — ELO impact halved. Don't let it happen again!
+            </div>
+          ) : (
+            <button
+              onClick={handleSillyMistake}
+              style={{
+                width: '100%',
+                padding: '11px 16px',
+                backgroundColor: 'transparent',
+                border: '1px solid #ca8a0466',
+                borderRadius: '8px',
+                color: '#fbbf24',
+                fontSize: '13px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#1c1a10';
+                e.currentTarget.style.borderColor = '#ca8a04';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.borderColor = '#ca8a0466';
+              }}
+            >
+              🤦 Silly Mistake — I knew this really
+            </button>
+          )}
+        </div>
+      )}
+
       <NextButton
         onClick={nextQuestion}
         label={isLastPart ? '→ Next Question' : '→ Next Part'}
@@ -147,6 +198,28 @@ function FeynmanResult({ answerResult, gradingStatus, nextQuestion, hasParts, cu
       <h2 style={{ color: '#8b5cf6', fontSize: '22px', fontWeight: 'bold', marginTop: 0, marginBottom: '20px' }}>
         📝 Feynman Assessment
       </h2>
+
+      {/* Submitted answer — always visible after submission */}
+      {answerResult?.user_answer && (
+        <div style={{
+          backgroundColor: '#1a1a1a',
+          border: '1px solid #3b2f6e',
+          borderRadius: '8px',
+          padding: '18px 20px',
+          marginBottom: '20px',
+        }}>
+          <p style={{
+            color: '#a78bfa', fontSize: '12px', fontWeight: '700',
+            textTransform: 'uppercase', letterSpacing: '0.08em',
+            marginBottom: '10px', marginTop: 0,
+          }}>
+            Your Answer
+          </p>
+          <p style={{ color: '#d1d5db', fontSize: '15px', lineHeight: '1.7', margin: 0, whiteSpace: 'pre-wrap' }}>
+            {answerResult.user_answer}
+          </p>
+        </div>
+      )}
 
       {/* Rubric — shown immediately while grading runs */}
       {answerResult?.rubric && (

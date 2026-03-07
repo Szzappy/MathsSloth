@@ -10,12 +10,12 @@ const router = express.Router();
 
 function eloToGrade(elo) {
   if (!elo) return 'U';
-  if (elo >= 2000) return 'A*';
-  if (elo >= 1800) return 'A';
-  if (elo >= 1600) return 'B';
-  if (elo >= 1400) return 'C';
-  if (elo >= 1200) return 'D';
-  if (elo >= 1000) return 'E';
+  if (elo >= 1800) return 'A*';
+  if (elo >= 1600) return 'A';
+  if (elo >= 1400) return 'B';
+  if (elo >= 1200) return 'C';
+  if (elo >= 1000) return 'D';
+  if (elo >= 800)  return 'E';
   return 'U';
 }
 
@@ -34,7 +34,7 @@ router.get("/dashboard-stats/:userid", async (req, res) => {
     const coreStats = await pool.query(`
       SELECT
         COUNT(*)                                                          AS total_questions,
-        ROUND(AVG(CASE WHEN is_correct THEN 100.0 ELSE 0 END), 1)       AS accuracy,
+        ROUND((SUM(marks_awarded)::numeric / NULLIF(SUM(marks_available), 0)) * 100.0, 1) AS accuracy,
         ROUND(SUM(time_taken) / 60.0, 0)                                 AS study_time_mins
       FROM question_attempts
       WHERE userid = $1
@@ -73,10 +73,23 @@ router.get("/dashboard-stats/:userid", async (req, res) => {
       }
     }
 
-    // ── Predicted grade: weighted average ELO across studied topics ──────
+    // ── Predicted grade: weighted average ELO across ATTEMPTED topics only ──────
+    // Excluding 'new' (never-attempted) topics so a quiz of 8 questions moves
+    // the needle visibly instead of being diluted across all 73 seeded topics.
+    // Falls back to full average only if user has never answered anything yet.
     const gradeResult = await pool.query(`
       SELECT
-        ROUND(SUM(utm.elo_rating * t.exam_weight) / NULLIF(SUM(t.exam_weight), 0))::integer AS weighted_elo
+        ROUND(
+          COALESCE(
+            -- Primary: only topics the user has actually attempted
+            NULLIF(
+              SUM(CASE WHEN utm.fsrs_state != 'new' THEN utm.elo_rating * t.exam_weight END) /
+              NULLIF(SUM(CASE WHEN utm.fsrs_state != 'new' THEN t.exam_weight END), 0),
+            NULL),
+            -- Fallback: all topics (used only before first quiz)
+            SUM(utm.elo_rating * t.exam_weight) / NULLIF(SUM(t.exam_weight), 0)
+          )
+        )::integer AS weighted_elo
       FROM user_topic_mastery utm
       JOIN topics t ON utm.topicid = t.topicid
       WHERE utm.userid = $1
@@ -194,7 +207,15 @@ router.get("/predicted-grade/:userid", async (req, res) => {
     const { userid } = req.params;
     const result = await pool.query(`
       SELECT
-        ROUND(SUM(utm.elo_rating * t.exam_weight) / NULLIF(SUM(t.exam_weight), 0))::integer AS weighted_elo
+        ROUND(
+          COALESCE(
+            NULLIF(
+              SUM(CASE WHEN utm.fsrs_state != 'new' THEN utm.elo_rating * t.exam_weight END) /
+              NULLIF(SUM(CASE WHEN utm.fsrs_state != 'new' THEN t.exam_weight END), 0),
+            NULL),
+            SUM(utm.elo_rating * t.exam_weight) / NULLIF(SUM(t.exam_weight), 0)
+          )
+        )::integer AS weighted_elo
       FROM user_topic_mastery utm
       JOIN topics t ON utm.topicid = t.topicid
       WHERE utm.userid = $1

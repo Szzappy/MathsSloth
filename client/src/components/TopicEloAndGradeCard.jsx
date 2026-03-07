@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 
 const getGradeFromElo = (elo) => {
-  if (elo >= 2000) return { grade: 'A*', color: '#10b981' };
-  if (elo >= 1800) return { grade: 'A',  color: '#10b981' };
-  if (elo >= 1600) return { grade: 'B',  color: '#3b82f6' };
-  if (elo >= 1400) return { grade: 'C',  color: '#3b82f6' };
-  if (elo >= 1200) return { grade: 'D',  color: '#f59e0b' };
-  if (elo >= 1000) return { grade: 'E',  color: '#f59e0b' };
-  return              { grade: 'U',  color: '#ef4444' };
+  if (elo >= 1800) return { grade: 'A*', color: '#f59e0b' };
+  if (elo >= 1600) return { grade: 'A',  color: '#10b981' };
+  if (elo >= 1400) return { grade: 'B',  color: '#06b6d4' };
+  if (elo >= 1200) return { grade: 'C',  color: '#3b82f6' };
+  if (elo >= 1000) return { grade: 'D',  color: '#8b5cf6' };
+  if (elo >= 800)  return { grade: 'E',  color: '#f97316' };
+  return               { grade: 'U',  color: '#ef4444' };
 };
 
 function groupByParent(topics) {

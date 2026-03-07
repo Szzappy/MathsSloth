@@ -625,26 +625,42 @@ instead of reconstructing history from question_attempts at query time.';
 
 -- ─── FUNCTION: upsert today''s snapshot for a given user ─────────────────────
 
+-- ─────────────────────────────────────────────────────────────────────────────
+-- PATCH: weighted ELO — only count attempted topics
+--
+-- Problem: onboarding seeds ALL 73 topics into user_topic_mastery with
+-- fsrs_state = 'new'. The weighted average divided by 73 means completing
+-- a quiz of 8 questions barely moves the needle.
+--
+-- Fix: only include topics where fsrs_state != 'new' in the weighted average.
+-- Falls back to the full average if the user has never answered anything yet.
+-- ─────────────────────────────────────────────────────────────────────────────
+
 CREATE OR REPLACE FUNCTION upsert_elo_snapshot(p_userid INTEGER)
 RETURNS VOID AS $$
 DECLARE
   v_weighted_elo    DECIMAL(8,4);
   v_topics_included INTEGER;
 BEGIN
-  -- Compute weighted ELO across ALL topics with a known rating and non-zero weight.
-  -- This is identical to the formula used in the predicted-grade and dashboard-stats
-  -- endpoints, so the chart and the dashboard always agree.
   SELECT
-    SUM(utm.elo_rating * t.exam_weight) / NULLIF(SUM(t.exam_weight), 0),
-    COUNT(*)
+    COALESCE(
+      -- Primary: only topics the user has actually attempted
+      NULLIF(
+        SUM(CASE WHEN utm.fsrs_state != 'new' THEN utm.elo_rating * t.exam_weight END)
+          / NULLIF(SUM(CASE WHEN utm.fsrs_state != 'new' THEN t.exam_weight END), 0),
+        NULL
+      ),
+      -- Fallback: all topics (only used before first quiz)
+      SUM(utm.elo_rating * t.exam_weight) / NULLIF(SUM(t.exam_weight), 0)
+    ),
+    COUNT(CASE WHEN utm.fsrs_state != 'new' THEN 1 END)
   INTO v_weighted_elo, v_topics_included
   FROM user_topic_mastery utm
   JOIN topics t ON utm.topicid = t.topicid
-  WHERE utm.userid  = p_userid
+  WHERE utm.userid      = p_userid
     AND utm.elo_rating IS NOT NULL
-    AND t.exam_weight > 0;
+    AND t.exam_weight   > 0;
 
-  -- Nothing to snapshot yet (user has answered no graded questions)
   IF v_weighted_elo IS NULL THEN
     RETURN;
   END IF;
@@ -666,8 +682,12 @@ $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION upsert_elo_snapshot(INTEGER) IS
 'Recomputes and upserts today''s weighted-ELO snapshot for the given user.
-Safe to call multiple times in a day — only one row per (userid, date) is kept,
-always reflecting the latest state.';
+Only includes attempted topics (fsrs_state != new) so quiz progress is visible.
+Falls back to all topics before first quiz. Safe to call multiple times per day.';
+
+-- Refresh today''s snapshot for all users so charts update immediately.
+SELECT upsert_elo_snapshot(userid)
+FROM (SELECT DISTINCT userid FROM user_topic_mastery) u;
 
 
 -- ─── TRIGGER: fire after every ELO update on user_topic_mastery ──────────────
@@ -983,6 +1003,48 @@ END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
 
+-- smarter way to calculate FSRS rating from marks and confidence
+-- combines marks and confidence into a single rating adjustment
+CREATE OR REPLACE FUNCTION calculate_fsrs_rating_from_marks(
+  p_marks_awarded INTEGER,
+  p_marks_available INTEGER,
+  p_confidence INTEGER
+) RETURNS INTEGER AS $$
+DECLARE
+  v_percentage DECIMAL(4,3);
+  v_base_rating INTEGER;
+BEGIN
+  v_percentage := p_marks_awarded::DECIMAL / p_marks_available;
+  
+  -- Base rating from marks
+  v_base_rating := CASE
+    WHEN v_percentage < 0.25 THEN 1
+    WHEN v_percentage < 0.55 THEN 2
+    WHEN v_percentage < 0.85 THEN 3
+    ELSE 4
+  END;
+  
+  -- Apply full 2D matrix
+  RETURN CASE
+    -- Again (1) - always stays 1
+    WHEN v_base_rating = 1 THEN 1
+    
+    -- Hard (2)
+    WHEN v_base_rating = 2 AND p_confidence <= 2 THEN 1  -- Uncertain failure -> Again
+    WHEN v_base_rating = 2 AND p_confidence = 3 THEN 2   -- Neutral
+    WHEN v_base_rating = 2 AND p_confidence >= 4 THEN 3  -- Confident error -> Good
+    
+    -- Good (3)
+    WHEN v_base_rating = 3 AND p_confidence <= 2 THEN 2  -- Lucky guess -> Hard
+    WHEN v_base_rating = 3 AND p_confidence >= 3 THEN 3  -- Otherwise Good
+    
+    -- Easy (4)
+    WHEN v_base_rating = 4 AND p_confidence <= 2 THEN 3  -- Very lucky -> Good
+    WHEN v_base_rating = 4 AND p_confidence >= 3 THEN 4  -- True mastery
+    ELSE v_base_rating  -- Fallback
+  END;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
 
 
 -- =====================================================================================================================================================
@@ -1266,7 +1328,9 @@ BEGIN
         v_new_difficulty := GREATEST(1, LEAST(10, v_new_difficulty));
       END IF;
 
-      v_interval_days := GREATEST(0.1, LEAST(36500, v_new_stability));
+      v_interval_days := GREATEST(1, LEAST(36500,
+        ROUND(v_new_stability * (POWER(0.9, 1.0 / c_fsrs_decay) - 1) * 9.0)
+      ));
 
       IF NOT v_fsrs_snapped THEN
         NEW.fsrs_stability_after  := v_new_stability;
@@ -1639,3 +1703,24 @@ SELECT
   COUNT(*) FILTER (WHERE mastery_category = 'Mastered') AS mastered
 FROM user_topic_mastery
 WHERE fsrs_state != 'new';
+
+
+
+-- =====================================================================================
+--  ONBOARDING MIGRATION
+--  Adds is_onboarded flag to users table so the app can redirect new users
+--  through the grade/topic calibration wizard before reaching the dashboard.
+-- =====================================================================================
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS is_onboarded BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Existing users who already have topic mastery rows are considered onboarded
+UPDATE users u
+SET is_onboarded = TRUE
+WHERE EXISTS (
+  SELECT 1 FROM user_topic_mastery utm WHERE utm.userid = u.userid
+);
+
+-- Index for fast lookup on login
+CREATE INDEX IF NOT EXISTS idx_users_is_onboarded ON users(userid) WHERE is_onboarded = FALSE;

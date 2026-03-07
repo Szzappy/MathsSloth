@@ -226,7 +226,7 @@ export const QuizProvider = ({ children }) => {
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data = await response.json();
         // Grading is now synchronous — marks_awarded and feedback come back immediately
-        setAnswerResult({ ...data, type: 'feynman' });
+        setAnswerResult({ ...data, type: 'feynman', user_answer: userAnswer });
         setGradingStatus(data.grading_status ?? 'graded');
         setShowAnswerCard(true);
         setCanSubmit(false);
@@ -289,6 +289,30 @@ export const QuizProvider = ({ children }) => {
   };
 
   // ============================================================
+  //  SILLY MISTAKE
+  //  Re-submits the last MCQ attempt with silly_mistake=true so the
+  //  backend can halve the ELO penalty via a corrective INSERT.
+  // ============================================================
+
+  const reportSillyMistake = async () => {
+    const activeQ = getActiveQuestion();
+    if (!activeQ || !answerResult) return;
+    try {
+      await fetch(`${API_URL}/quiz/answer/silly-mistake`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userid,
+          questionid: activeQ.questionid,
+          quizid,
+        }),
+      });
+    } catch (err) {
+      console.error('Error reporting silly mistake:', err);
+    }
+  };
+
+  // ============================================================
   //  NAVIGATION
   // ============================================================
 
@@ -346,7 +370,7 @@ export const QuizProvider = ({ children }) => {
       confidence, setConfidence,
       answerResult, gradingStatus, isSubmitting,
       markScheme,
-      getAnswer, submitAnswer, nextQuestion,
+      getAnswer, submitAnswer, nextQuestion, reportSillyMistake,
       getActiveQuestion, hasParts,
       renderQuestionWithMaths,
     }}>

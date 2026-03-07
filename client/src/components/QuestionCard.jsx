@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useQuiz } from '../contexts/QuizContext.jsx';
 
 const card = {
@@ -40,14 +40,31 @@ function CompletedPart({ part, index, renderQuestionWithMaths }) {
 }
 
 function MCQOptions({ options, selectedOption, setSelectedOption }) {
+  // Shuffle once on mount — stable across re-renders for this question instance.
+  // originalLabel is preserved for server submission (correct_answer comparison).
+  // displayLabel is reassigned A/B/C/D sequentially after shuffling.
+  const shuffled = useMemo(() => {
+    const arr = [...options];
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    const displayLetters = ['A', 'B', 'C', 'D', 'E'];
+    return arr.map((opt, i) => ({
+      ...opt,
+      originalLabel: opt.label,        // keep for server submission
+      displayLabel: displayLetters[i],  // always A, B, C, D in display order
+    }));
+  }, [options]);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '24px' }}>
-      {options.map(({ label, text }) => {
-        const isSelected = selectedOption === label;
+      {shuffled.map(({ originalLabel, displayLabel, text }) => {
+        const isSelected = selectedOption === originalLabel;
         return (
           <button
-            key={label}
-            onClick={() => setSelectedOption(label)}
+            key={originalLabel}
+            onClick={() => setSelectedOption(originalLabel)}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -90,7 +107,7 @@ function MCQOptions({ options, selectedOption, setSelectedOption }) {
               fontSize: '14px',
               flexShrink: 0,
             }}>
-              {label}
+              {displayLabel}
             </span>
             <span>{text}</span>
           </button>
@@ -290,6 +307,13 @@ function QuestionCard() {
   const questionHasParts = hasParts();
   const format = activeQuestion?.question_format;
 
+  const FORMAT_COLORS = {
+    multiple_choice: '#3b82f6',  // blue
+    self_mark:       '#10b981',  // green
+    feynman:         '#8b5cf6',  // purple
+  };
+  const formatColor = FORMAT_COLORS[format] ?? '#9ca3af';
+
   const serverDoneParts = questionHasParts ? (topLevelQuestion.doneParts ?? []) : [];
   const allDoneParts = [
     ...serverDoneParts,
@@ -316,7 +340,7 @@ function QuestionCard() {
         paddingBottom: '16px',
         borderBottom: '1px solid #404040',
       }}>
-        <h1 style={{ color: '#10b981', fontSize: '22px', fontWeight: 'bold', margin: 0 }}>
+        <h1 style={{ color: formatColor, fontSize: '22px', fontWeight: 'bold', margin: 0 }}>
           Question {currentQuestion}
           {questionHasParts && (
             <span style={{ color: '#9ca3af', fontSize: '16px', fontWeight: 'normal', marginLeft: '8px' }}>
@@ -325,13 +349,13 @@ function QuestionCard() {
           )}
         </h1>
         <div style={{
-          backgroundColor: '#1a1a1a',
+          backgroundColor: formatColor + '15',
           padding: '6px 14px',
           borderRadius: '6px',
-          border: '1px solid #404040',
+          border: `1px solid ${formatColor}44`,
         }}>
           <span style={{ color: '#9ca3af', fontSize: '13px' }}>
-            📊 <strong style={{ color: '#10b981' }}>{activeQuestion?.total_marks}</strong> mark{activeQuestion?.total_marks !== 1 ? 's' : ''}
+            📊 <strong style={{ color: formatColor }}>{activeQuestion?.total_marks}</strong> mark{activeQuestion?.total_marks !== 1 ? 's' : ''}
           </span>
         </div>
       </div>

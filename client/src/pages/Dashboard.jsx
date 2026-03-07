@@ -4,18 +4,43 @@ import { useAuth } from '../contexts/AuthContext';
 import { useQuiz } from '../contexts/QuizContext';
 import QuizSetupModal from '../components/QuizSetupModal';
 
-// A*–E colour mapping
+// Grade colour palette — matches analytics.js / TopicEloAndGradeCard
 const GRADE_COLORS = {
-  'A*': '#10b981',
-  'A':  '#10b981',
-  'B':  '#3b82f6',
-  'C':  '#3b82f6',
-  'D':  '#f59e0b',
-  'E':  '#f59e0b',
-  'U':  '#ef4444',
+  'A*': '#f59e0b',  // gold
+  'A':  '#10b981',  // green
+  'B':  '#06b6d4',  // cyan
+  'C':  '#3b82f6',  // blue
+  'D':  '#8b5cf6',  // purple
+  'E':  '#f97316',  // orange
+  'U':  '#ef4444',  // red
 };
 
+// ELO thresholds matching backend eloToGrade
+const GRADE_THRESHOLDS = [
+  { grade: 'A*', min: 1800, max: Infinity },
+  { grade: 'A',  min: 1600, max: 1800 },
+  { grade: 'B',  min: 1400, max: 1600 },
+  { grade: 'C',  min: 1200, max: 1400 },
+  { grade: 'D',  min: 1000, max: 1200 },
+  { grade: 'E',  min: 800,  max: 1000 },
+  { grade: 'U',  min: 0,    max: 800  },
+];
+
 const getGradeColor = (grade) => GRADE_COLORS[grade] ?? '#9ca3af';
+
+// Progress within current grade band (0–1)
+const gradeProgress = (elo, grade) => {
+  const band = GRADE_THRESHOLDS.find(t => t.grade === grade);
+  if (!band || !elo) return 0;
+  if (band.max === Infinity) return 1; // A* — already there
+  return Math.min(1, Math.max(0, (elo - band.min) / (band.max - band.min)));
+};
+
+// Label for next grade up
+const nextGrade = (grade) => {
+  const idx = GRADE_THRESHOLDS.findIndex(t => t.grade === grade);
+  return idx > 0 ? GRADE_THRESHOLDS[idx - 1].grade : null;
+};
 
 function Dashboard() {
   const API_URL = import.meta.env.VITE_API_URL;
@@ -127,42 +152,101 @@ function Dashboard() {
                 Predicted Grade
               </p>
 
-              {/* Grade ring */}
+              {/* Grade hero block */}
               <div style={{
-                width: '160px',
-                height: '160px',
-                borderRadius: '50%',
-                border: `10px solid ${loading ? '#333' : gradeColor}`,
+                position: 'relative',
+                width: '100%',
+                borderRadius: '14px',
+                background: loading ? '#1a1a1a' : `linear-gradient(135deg, ${gradeColor}18 0%, ${gradeColor}08 100%)`,
+                border: `1px solid ${loading ? '#333' : gradeColor}44`,
+                padding: '20px 16px 16px',
+                marginBottom: '14px',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: '16px',
-                transition: 'border-color 0.3s',
-                boxShadow: loading ? 'none' : `0 0 20px ${gradeColor}33`,
+                boxShadow: loading ? 'none' : `0 0 28px ${gradeColor}22`,
+                transition: 'all 0.3s',
+                overflow: 'hidden',
               }}>
-                <span style={{ fontSize: '68px', fontWeight: '800', color: loading ? '#6b7280' : gradeColor, lineHeight: 1 }}>
+                {/* Decorative background letter */}
+                {!loading && (
+                  <span style={{
+                    position: 'absolute',
+                    right: '-8px', top: '-12px',
+                    fontSize: '120px', fontWeight: '900',
+                    color: gradeColor, opacity: 0.06,
+                    lineHeight: 1, pointerEvents: 'none',
+                    userSelect: 'none',
+                  }}>
+                    {stats.predictedGrade}
+                  </span>
+                )}
+                {/* Big grade letter */}
+                <span style={{
+                  fontSize: '80px', fontWeight: '900',
+                  color: loading ? '#6b7280' : gradeColor,
+                  lineHeight: 1, letterSpacing: '-2px',
+                  textShadow: loading ? 'none' : `0 0 30px ${gradeColor}66`,
+                  transition: 'all 0.3s',
+                }}>
                   {loading ? '…' : stats.predictedGrade}
                 </span>
+                {/* ELO value */}
                 {!loading && stats.weightedElo > 0 && (
-                  <span style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px', fontWeight: '600' }}>
+                  <span style={{
+                    fontSize: '12px', fontWeight: '700',
+                    color: gradeColor, opacity: 0.8,
+                    letterSpacing: '0.08em', marginTop: '2px',
+                  }}>
                     {stats.weightedElo} ELO
                   </span>
                 )}
+                {/* Progress bar within grade band */}
+                {!loading && stats.weightedElo > 0 && (
+                  <div style={{ width: '100%', marginTop: '14px' }}>
+                    {(() => {
+                      const prog = gradeProgress(stats.weightedElo, stats.predictedGrade);
+                      const next = nextGrade(stats.predictedGrade);
+                      return (
+                        <>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                            <span style={{ color: '#4b5563', fontSize: '10px', fontWeight: '600' }}>
+                              {stats.predictedGrade}
+                            </span>
+                            {next && (
+                              <span style={{ color: getGradeColor(next), fontSize: '10px', fontWeight: '600' }}>
+                                {next} →
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ height: '5px', borderRadius: '3px', backgroundColor: '#2a2a2a', overflow: 'hidden' }}>
+                            <div style={{
+                              height: '100%',
+                              width: `${prog * 100}%`,
+                              borderRadius: '3px',
+                              background: `linear-gradient(90deg, ${gradeColor}99, ${gradeColor})`,
+                              transition: 'width 0.6s ease',
+                            }} />
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
 
-              {/* Grade legend */}
+              {/* Grade legend pills */}
               {!loading && (
-                <div style={{ display: 'flex', gap: '5px', marginBottom: '14px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                <div style={{ display: 'flex', gap: '4px', marginBottom: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
                   {['A*', 'A', 'B', 'C', 'D', 'E', 'U'].map(g => (
                     <span key={g} style={{
-                      padding: '3px 8px',
-                      borderRadius: '6px',
+                      padding: '3px 7px',
+                      borderRadius: '5px',
                       fontSize: '11px',
                       fontWeight: '700',
-                      backgroundColor: stats.predictedGrade === g ? getGradeColor(g) : '#1a1a1a',
-                      color: stats.predictedGrade === g ? '#fff' : '#4b5563',
-                      border: `1px solid ${stats.predictedGrade === g ? getGradeColor(g) : '#2a2a2a'}`,
+                      backgroundColor: stats.predictedGrade === g ? getGradeColor(g) + '22' : 'transparent',
+                      color: stats.predictedGrade === g ? getGradeColor(g) : '#374151',
+                      border: `1px solid ${stats.predictedGrade === g ? getGradeColor(g) + '66' : '#2a2a2a'}`,
                       transition: 'all 0.2s',
                     }}>
                       {g}
@@ -171,9 +255,9 @@ function Dashboard() {
                 </div>
               )}
 
-              <p style={{ color: '#6b7280', fontSize: '13px', margin: 0, marginBottom: '4px', textAlign: 'center' }}>
+              <p style={{ color: '#6b7280', fontSize: '12px', margin: 0, marginBottom: '4px', textAlign: 'center' }}>
                 {stats.daysUntilExam != null
-                  ? `📅 ${stats.daysUntilExam} days to push for that A!`
+                  ? `📅 ${stats.daysUntilExam} days to push for that ${nextGrade(stats.predictedGrade) ?? 'A*'}!`
                   : '📅 Keep practising to improve!'}
               </p>
               {stats.streak > 0 && (

@@ -46,8 +46,9 @@ function Login() {
       const data = await response.json();
 
       if (response.ok && data.token) {
-        login(data.token, data.username);
-        navigate("/dashboard");
+        // ── CHANGED: pass is_onboarded so AuthContext and routing work correctly ──
+        login(data.token, data.username, data.is_onboarded ?? false);
+        navigate(data.is_onboarded ? "/dashboard" : "/onboarding");
       } else if (response.status === 403 && data.needsVerification) {
         setNeedsVerification(true);
         setUserEmail(data.email || email);
@@ -427,7 +428,7 @@ function Login() {
             fontSize: '0.875rem',
             color: '#9ca3af'
           }}>
-            Don't have an account?{' '}
+            Don't have an account?{" "}
             <Link to="/register" style={{
               color: '#10b981',
               fontWeight: '500',

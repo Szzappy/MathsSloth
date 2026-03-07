@@ -11,32 +11,30 @@ import { localPoint } from '@visx/event';
 import { bisector } from 'd3-array';
 
 const GRADE_BANDS = [
-  { min: 2000, label: 'A*', color: '#10b981' },
-  { min: 1800, label: 'A',  color: '#10b981' },
-  { min: 1600, label: 'B',  color: '#3b82f6' },
-  { min: 1400, label: 'C',  color: '#3b82f6' },
-  { min: 1200, label: 'D',  color: '#f59e0b' },
-  { min: 1000, label: 'E',  color: '#f59e0b' },
+  { min: 1800, label: 'A*', color: '#f59e0b' },
+  { min: 1600, label: 'A',  color: '#10b981' },
+  { min: 1400, label: 'B',  color: '#06b6d4' },
+  { min: 1200, label: 'C',  color: '#3b82f6' },
+  { min: 1000, label: 'D',  color: '#8b5cf6' },
+  { min: 800,  label: 'E',  color: '#f97316' },
   { min: 0,    label: 'U',  color: '#ef4444' },
 ];
 
 function eloToGrade(elo) {
-  for (const band of GRADE_BANDS) {
-    if (elo >= band.min) return band;
-  }
-  return GRADE_BANDS[GRADE_BANDS.length - 1];
+  if (!elo || elo < 800) return GRADE_BANDS[GRADE_BANDS.length - 1]; // U
+  return GRADE_BANDS.find(b => elo >= b.min) ?? GRADE_BANDS[GRADE_BANDS.length - 1];
 }
 
-const tooltipStyles = {
+const tooltipStyles = (color = '#10b981') => ({
   ...defaultStyles,
   backgroundColor: '#1e1e1e',
   color: 'white',
   padding: '10px 14px',
   borderRadius: 8,
-  border: '1px solid #10b981',
+  border: `1px solid ${color}55`,
   fontSize: 12,
-  boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
-};
+  boxShadow: `0 4px 20px rgba(0,0,0,0.5)`,
+});
 
 function GradeProgressChart({ userid, width = 750, height = 340 }) {
   const API_URL = import.meta.env.VITE_API_URL;
@@ -142,15 +140,31 @@ function GradeProgressChart({ userid, width = 750, height = 340 }) {
           </div>
         </div>
         <div style={{
-          backgroundColor: currentGrade.color + '22',
+          background: `linear-gradient(135deg, ${currentGrade.color}22 0%, ${currentGrade.color}0a 100%)`,
           border: `1px solid ${currentGrade.color}55`,
-          borderRadius: 8,
-          padding: '6px 14px',
+          borderRadius: 10,
+          padding: '8px 16px',
           textAlign: 'center',
+          boxShadow: `0 0 16px ${currentGrade.color}22`,
+          minWidth: 72,
+          position: 'relative',
+          overflow: 'hidden',
         }}>
-          <div style={{ color: '#9ca3af', fontSize: 10, marginBottom: 2 }}>CURRENT</div>
-          <div style={{ color: currentGrade.color, fontSize: 22, fontWeight: 700 }}>{currentGrade.label}</div>
-          <div style={{ color: '#6b7280', fontSize: 11 }}>{progressData[progressData.length - 1]?.elo} ELO</div>
+          {/* ghost letter behind */}
+          <span style={{
+            position: 'absolute', right: -4, top: -8,
+            fontSize: 56, fontWeight: 900,
+            color: currentGrade.color, opacity: 0.08,
+            lineHeight: 1, pointerEvents: 'none', userSelect: 'none',
+          }}>{currentGrade.label}</span>
+          <div style={{ color: '#6b7280', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', marginBottom: 2 }}>CURRENT</div>
+          <div style={{
+            color: currentGrade.color, fontSize: 28, fontWeight: 900, lineHeight: 1,
+            textShadow: `0 0 16px ${currentGrade.color}88`,
+          }}>{currentGrade.label}</div>
+          <div style={{ color: currentGrade.color, opacity: 0.7, fontSize: 10, fontWeight: 600, marginTop: 2 }}>
+            {progressData[progressData.length - 1]?.elo} ELO
+          </div>
         </div>
       </div>
 
@@ -253,7 +267,7 @@ function GradeProgressChart({ userid, width = 750, height = 340 }) {
       </svg>
 
       {tooltipOpen && tooltipData && (
-        <Tooltip top={tooltipTop - 12} left={tooltipLeft + 12} style={tooltipStyles}>
+        <Tooltip top={tooltipTop - 12} left={tooltipLeft + 12} style={tooltipStyles(eloToGrade(tooltipData.elo).color)}>
           <div style={{ fontWeight: 600, marginBottom: 4 }}>
             {tooltipData.date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
           </div>

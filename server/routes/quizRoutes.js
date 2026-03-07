@@ -253,7 +253,7 @@ router.post("/adaptive", async (req, res) => {
           END
           * SQRT(utm.glicko_rd / 350.0)
           * GREATEST(0.5, 1.0 + (COALESCE(utm.mastery_gap, 0) / -200.0))
-          * t.exam_weight
+          * COALESCE(t.exam_weight, 1.0)
         )::numeric, 5) AS priority_score
       FROM user_topic_mastery utm
       JOIN topics t ON utm.topicid = t.topicid
@@ -316,7 +316,7 @@ router.post("/adaptive", async (req, res) => {
           END AS urgency,
           SQRT(utm.glicko_rd / 350.0) AS uncertainty,
           GREATEST(0.5, 1.0 + (COALESCE(utm.mastery_gap, 0) / -200.0)) AS mastery_need,
-          t.exam_weight AS utility,
+          COALESCE(t.exam_weight, 1.0) AS utility,
           (
             CASE
               WHEN utm.next_review_date IS NULL THEN 0.5
@@ -336,7 +336,7 @@ router.post("/adaptive", async (req, res) => {
           ) *
           SQRT(utm.glicko_rd / 350.0) *
           GREATEST(0.5, 1.0 + (COALESCE(utm.mastery_gap, 0) / -200.0)) *
-          t.exam_weight AS priority_score
+          COALESCE(t.exam_weight, 1.0) AS priority_score
         FROM user_topic_mastery utm
         JOIN topics t ON utm.topicid = t.topicid
         WHERE utm.userid = $1
@@ -356,22 +356,19 @@ router.post("/adaptive", async (req, res) => {
         JOIN question_topics qt ON pt.topic_code = qt.topic_code
         JOIN questions q ON qt.questionid = q.questionid
         WHERE
-          -- BUG 2 FIX: widened from 0.50–0.85 to 0.40–0.90 so thin question banks
-          -- (few questions per topic) still yield candidates for high-priority topics
-          1.0 / (1.0 + POWER(10, (q.elo_rating - pt.user_elo) / 400.0)) BETWEEN 0.40 AND 0.90
-          -- BUG 1 FIX: restored the 7-day interval (was accidentally commented out,
-          -- making the filter 'attempted_at > NOW()' which never excludes anything)
-          AND q.questionid NOT IN (
+          -- No ES filter here — we rank by difficulty_distance and the selection
+          -- logic picks closest-to-70% questions. A hard cap was rejecting all
+          -- questions for high-priority topics with a thin bank.
+          q.questionid NOT IN (
             SELECT questionid FROM question_attempts
             WHERE userid = $1 AND attempted_at > NOW() - INTERVAL '24 hours'
           )
           AND q.is_anchor = FALSE
-          -- BUG 4 FIX: also exclude parent stems (questions that have children)
-          -- parent_question_id IS NULL is not enough — stems have no parent but do have children
+          -- Allow both standalone questions AND multi-part stems.
+          -- Stems have parent_question_id IS NULL and DO have children — insertQuestionsIntoQuiz
+          -- expands them into their child parts automatically.
+          -- Only exclude child parts themselves (they're inserted via their parent stem).
           AND q.parent_question_id IS NULL
-          AND NOT EXISTS (
-            SELECT 1 FROM questions child WHERE child.parent_question_id = q.questionid
-          )
       ),
       -- Rank topics by priority score. Top-4 get up to 2 questions each (8 total).
       -- If top-4 can't fill 8 questions (thin bank), overflow fills from topics ranked 5+.
@@ -413,6 +410,105 @@ router.post("/adaptive", async (req, res) => {
         SELECT *, 1 AS pool_tier FROM primary_selected
         UNION ALL
         SELECT *, 2 AS pool_tier FROM overflow_selected
+      ),
+      already_selected AS (
+        SELECT questionid FROM combined
+      ),
+      -- Gap-filler pool A: questions on topics with NO quiz attempts yet (never answered,
+      -- regardless of whether the topic is in user_topic_mastery from onboarding).
+      -- Picked by difficulty closeness to 70% ES using the onboarded ELO as baseline.
+      unassessed_fill AS (
+        SELECT
+          q.questionid, q.question_text, q.image_url, q.question_format,
+          q.correct_answer, q.answer_options, q.explanation, q.total_marks,
+          q.parent_question_id, q.part_label, q.order_index,
+          t.topic_code, t.topic_name,
+          0.0                                                             AS priority_score,
+          0.5                                                             AS urgency,
+          0.5                                                             AS uncertainty,
+          1.0                                                             AS mastery_need,
+          COALESCE(t.exam_weight, 1.0)                                    AS utility,
+          1.0 / (1.0 + POWER(10, (q.elo_rating - COALESCE(utm_elo.elo_rating, 1500.0)) / 400.0)) AS expected_success,
+          ABS(1.0 / (1.0 + POWER(10, (q.elo_rating - COALESCE(utm_elo.elo_rating, 1500.0)) / 400.0)) - 0.70) AS difficulty_distance,
+          1                                                               AS q_rank,
+          3                                                               AS pool_tier
+        FROM questions q
+        JOIN question_topics qt ON q.questionid = qt.questionid
+        JOIN topics t ON qt.topic_code = t.topic_code
+        -- Join user's ELO for this topic if onboarding seeded it
+        LEFT JOIN (
+          SELECT utm.elo_rating, top.topic_code
+          FROM user_topic_mastery utm
+          JOIN topics top ON utm.topicid = top.topicid
+          WHERE utm.userid = $1
+        ) utm_elo ON utm_elo.topic_code = t.topic_code
+        WHERE q.is_anchor = FALSE
+          AND q.parent_question_id IS NULL
+          AND q.questionid NOT IN (SELECT questionid FROM already_selected)
+          -- No quiz attempts ever on this topic (different from onboarding seeding)
+          AND NOT EXISTS (
+            SELECT 1 FROM question_attempts qa
+            JOIN question_topics qt2 ON qa.questionid = qt2.questionid
+            WHERE qa.userid = $1
+              AND qt2.topic_code = t.topic_code
+          )
+        ORDER BY difficulty_distance ASC
+      ),
+      -- Gap-filler pool B: any remaining questions not yet selected, ignoring the
+      -- 24h cooldown entirely. Searches ALL topics (not just top-20 priority_topics)
+      -- so questions are always found even after a thin question bank runs dry.
+      -- Ordered by priority_score DESC so highest-value cooldown breaks come first.
+      assessed_fill AS (
+        SELECT
+          q.questionid, q.question_text, q.image_url, q.question_format,
+          q.correct_answer, q.answer_options, q.explanation, q.total_marks,
+          q.parent_question_id, q.part_label, q.order_index,
+          t.topic_code, t.topic_name,
+          COALESCE(utm_fill.priority_score, 0.0)                         AS priority_score,
+          0.5                                                             AS urgency,
+          SQRT(COALESCE(utm_fill.glicko_rd, 350.0) / 350.0)             AS uncertainty,
+          GREATEST(0.5, 1.0 + (COALESCE(utm_fill.mastery_gap, 0) / -200.0)) AS mastery_need,
+          COALESCE(t.exam_weight, 1.0)                                   AS utility,
+          1.0 / (1.0 + POWER(10, (q.elo_rating - COALESCE(utm_fill.elo_rating, 1500.0)) / 400.0)) AS expected_success,
+          ABS(1.0 / (1.0 + POWER(10, (q.elo_rating - COALESCE(utm_fill.elo_rating, 1500.0)) / 400.0)) - 0.70) AS difficulty_distance,
+          1                                                               AS q_rank,
+          4                                                               AS pool_tier
+        FROM questions q
+        JOIN question_topics qt ON q.questionid = qt.questionid
+        JOIN topics t ON qt.topic_code = t.topic_code
+        -- Bring in the user's mastery data so we can order by real priority
+        LEFT JOIN (
+          SELECT
+            utm.elo_rating, utm.glicko_rd, COALESCE(utm.mastery_gap, 0) AS mastery_gap,
+            top.topic_code,
+            (
+              CASE
+                WHEN utm.next_review_date IS NULL THEN 0.5
+                WHEN utm.next_review_date > NOW() THEN
+                  0.1 * EXP(-GREATEST(EXTRACT(EPOCH FROM (utm.next_review_date - NOW()))/86400, 0)
+                             / (2.0 * GREATEST(utm.fsrs_stability, 0.1)))
+                ELSE LEAST(1.0, 1.0 - POWER(
+                  1.0 + EXTRACT(EPOCH FROM (NOW() - utm.next_review_date))/86400
+                      / (9.0 * GREATEST(utm.fsrs_stability, 0.1)), -1.0))
+              END
+            ) * SQRT(utm.glicko_rd / 350.0)
+              * GREATEST(0.5, 1.0 + (COALESCE(utm.mastery_gap, 0) / -200.0))
+              * COALESCE(t2.exam_weight, 1.0)                            AS priority_score
+          FROM user_topic_mastery utm
+          JOIN topics top ON utm.topicid = top.topicid
+          JOIN topics t2  ON t2.topic_code = top.topic_code
+          WHERE utm.userid = $1
+        ) utm_fill ON utm_fill.topic_code = t.topic_code
+        WHERE q.is_anchor = FALSE
+          AND q.parent_question_id IS NULL
+          AND q.questionid NOT IN (SELECT questionid FROM already_selected)
+          AND q.questionid NOT IN (SELECT questionid FROM unassessed_fill)
+          -- 4h soft cooldown: prevents same questions repeating in back-to-back quizzes
+          -- while still bypassing the full 24h cooldown for thin question banks
+          AND q.questionid NOT IN (
+            SELECT questionid FROM question_attempts
+            WHERE userid = $1 AND attempted_at > NOW() - INTERVAL '4 hours'
+          )
       )
       SELECT questionid, question_text, image_url, question_format,
         correct_answer, answer_options, explanation, total_marks,
@@ -423,18 +519,31 @@ router.post("/adaptive", async (req, res) => {
         ROUND(uncertainty::numeric, 3) AS uncertainty,
         ROUND(mastery_need::numeric, 3) AS mastery_need,
         ROUND(utility::numeric, 2) AS utility,
-        ROUND(priority_score::numeric, 4) AS priority_score
-      FROM combined
-      ORDER BY pool_tier ASC, priority_score DESC, difficulty_distance ASC
+        ROUND(priority_score::numeric, 4) AS priority_score,
+        pool_tier
+      FROM (
+        SELECT * FROM combined
+        UNION ALL
+        SELECT * FROM unassessed_fill
+        UNION ALL
+        SELECT * FROM assessed_fill
+      ) all_candidates
+      -- Small random jitter (±0.005) breaks ties when many topics share identical
+      -- priority scores (e.g. all-new users after onboarding) so quizzes vary.
+      ORDER BY pool_tier ASC, (priority_score + (RANDOM() * 0.01 - 0.005)) DESC, difficulty_distance ASC
       LIMIT $2
     `, [userid, question_count]);
 
-    // ── Debug: log tier-1 results ─────────────────────────────────────────────
+    // ── Debug: log selected questions by pool tier ──────────────────────────
     if (questions.rows.length > 0) {
-      console.log('\n\u2501\u2501\u2501 TIER-1 SELECTED QUESTIONS \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501');
-      console.log('  qid  topic     format          ES     urgency  priority   topic_name           question_preview');
-      console.log('  ' + '-'.repeat(108));
+      const byTier = { 1: [], 2: [], 3: [], 4: [] };
+      for (const q of questions.rows) byTier[q.pool_tier ?? 1].push(q);
+      const tierLabels = { 1: 'PRIMARY (top-4 topics)', 2: 'OVERFLOW (topics 5+)', 3: 'NEVER ATTEMPTED (no cooldown)', 4: 'COOLDOWN BYPASS (all topics)' };
+      console.log('\n\u2501\u2501\u2501 SELECTED QUESTIONS \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501');
+      console.log('  qid  topic     format          ES     urgency  priority   pool               question_preview');
+      console.log('  ' + '-'.repeat(115));
       for (const q of questions.rows) {
+        const tier = q.pool_tier ?? 1;
         console.log(
           ' ', String(q.questionid).padEnd(5),
           q.topic_code.padEnd(10),
@@ -442,14 +551,17 @@ router.post("/adaptive", async (req, res) => {
           String(parseFloat(q.expected_success).toFixed(3)).padEnd(7),
           String(parseFloat(q.urgency).toFixed(3)).padEnd(9),
           String(parseFloat(q.priority_score).toFixed(4)).padEnd(11),
-          (q.topic_name || '').substring(0, 20).padEnd(21),
+          (tierLabels[tier] || '').substring(0, 18).padEnd(19),
           q.question_text.replace(/[$\\]/g, '').replace(/\s+/g, ' ').substring(0, 35)
         );
       }
+      for (const [tier, qs] of Object.entries(byTier)) {
+        if (qs.length > 0) console.log(`  Pool ${tier} (${tierLabels[tier]}): ${qs.length} question(s)`);
+      }
       console.log('\n');
     } else {
-      console.log('\n  TIER-1: 0 questions found');
-      console.log('  Check: 24h cooldown blocking all? ES range 0.40-0.90 too narrow?\n');
+      console.log('\n  0 questions found — all pools exhausted');
+      console.log('  Check: question bank empty? All questions are stems?\n');
     }
 
     if (questions.rows.length === 0) {
@@ -486,9 +598,6 @@ router.post("/adaptive", async (req, res) => {
           JOIN user_topics ut ON qt.topic_code = ut.topic_code
           WHERE q.is_anchor = FALSE
             AND q.parent_question_id IS NULL
-            AND NOT EXISTS (
-              SELECT 1 FROM questions child WHERE child.parent_question_id = q.questionid
-            )
             -- Tier 2: relaxed to 4-hour cooldown so questions answered earlier today re-enter
             AND q.questionid NOT IN (
               SELECT questionid FROM question_attempts
@@ -548,9 +657,6 @@ router.post("/adaptive", async (req, res) => {
           FROM questions q
           WHERE q.is_anchor = FALSE
             AND q.parent_question_id IS NULL
-            AND NOT EXISTS (
-              SELECT 1 FROM questions child WHERE child.parent_question_id = q.questionid
-            )
           ORDER BY RANDOM()
           LIMIT $1
         `, [question_count]);
@@ -866,9 +972,9 @@ router.post("/answer/feynman", async (req, res) => {
     let gradingStatus = "failed";
 
     try {
-      const gradingPrompt = `You are an A-level maths examiner. Grade the following student explanation.
+      const gradingPrompt = `You are a supportive A-level maths teacher marking a student's written explanation.
 
-MARK SCHEME / RUBRIC:
+CONCEPT BEING TESTED (use this as a guide, not a rigid checklist):
 ${question.explanation}
 
 TOTAL MARKS AVAILABLE: ${question.total_marks}
@@ -876,8 +982,15 @@ TOTAL MARKS AVAILABLE: ${question.total_marks}
 STUDENT'S EXPLANATION:
 ${user_answer}
 
-Award marks strictly based on the rubric. Return ONLY a JSON object with this exact shape:
-{"marks_awarded": <integer 0–${question.total_marks}>, "feedback": "<2–3 sentence constructive feedback explaining what was good and what was missing>"}`;
+MARKING PHILOSOPHY:
+- Reward genuine understanding, not exact wording. If the student clearly grasps the concept, award the mark even if they phrase it differently from the rubric.
+- Be lenient with notation and informal language — A-level students explaining in plain English is the goal.
+- Award partial credit generously. A student who gets the core idea but misses a detail should score at least ${question.total_marks - 1} out of ${question.total_marks}.
+- Only withhold marks for genuine conceptual misunderstanding, not imprecise wording.
+- If the answer is completely wrong or blank, award 0. If it shows reasonable understanding, award at least 1.
+
+Return ONLY a JSON object with this exact shape:
+{"marks_awarded": <integer 0–${question.total_marks}>, "feedback": "<2–3 sentence constructive feedback: start with what they got right, then briefly mention what could be clearer>"}`;
 
       const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
@@ -933,12 +1046,73 @@ Award marks strictly based on the rubric. Return ONLY a JSON object with this ex
 });
 
 // =====================================================================================
+//                           SILLY MISTAKE
+//
+//   When a user flags a wrong MCQ answer as a silly mistake, we insert a second
+//   corrective attempt worth 50% marks. The trigger fires again and partially
+//   reverses the ELO loss — net effect is ~50% of the original penalty.
+// =====================================================================================
+
+router.post("/answer/silly-mistake", async (req, res) => {
+  try {
+    const { userid, questionid, quizid } = req.body;
+
+    if (!userid || !questionid || !quizid) {
+      return res.status(400).json({ error: "userid, questionid and quizid are required" });
+    }
+
+    // Find the most recent attempt for this question in this quiz
+    const lastAttempt = await pool.query(`
+      SELECT confidence, marks_available
+      FROM question_attempts
+      WHERE userid = $1 AND questionid = $2 AND quizid = $3
+      ORDER BY attempted_at DESC
+      LIMIT 1
+    `, [userid, questionid, quizid]);
+
+    if (lastAttempt.rows.length === 0) {
+      return res.status(404).json({ error: "No attempt found for this question" });
+    }
+
+    const { confidence, marks_available } = lastAttempt.rows[0];
+    // Award 50% marks — the trigger treats this as partial credit and
+    // partially reverses the ELO drop from the original wrong answer.
+    const silly_marks = Math.round((marks_available ?? 1) * 0.5);
+
+    await pool.query(`
+      INSERT INTO question_attempts (
+        userid, questionid, quizid,
+        marks_awarded, marks_available,
+        is_correct, confidence, time_taken,
+        user_answer, grading_status
+      ) VALUES ($1, $2, $3, $4, $5, false, $6, 0, 'silly_mistake', 'graded')
+    `, [userid, questionid, quizid, silly_marks, marks_available, confidence]);
+
+    res.status(200).json({ message: "Silly mistake recorded", marks_awarded: silly_marks });
+  } catch (error) {
+    console.error("Error recording silly mistake:", error);
+    res.status(500).json({ error: "Failed to record silly mistake" });
+  }
+});
+
+// =====================================================================================
 //                           TOPICS
 // =====================================================================================
 
 router.get("/topics", async (req, res) => {
   try {
-    const topicsResult = await pool.query(`SELECT * FROM topics ORDER BY topicid ASC`);
+    // Returns every topic with parent info so the onboarding wizard can group by chapter
+    const topicsResult = await pool.query(`
+      SELECT
+        t.topicid,
+        t.topic_code,
+        t.topic_name,
+        t.parent_topic,
+        parent.topic_name AS parent_topic_name
+      FROM topics t
+      LEFT JOIN topics parent ON parent.topic_code = t.parent_topic
+      ORDER BY t.topic_code ASC
+    `);
     res.status(200).json({ topics: topicsResult.rows });
   } catch (error) {
     console.error("Error fetching topics:", error);

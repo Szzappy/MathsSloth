@@ -35,8 +35,8 @@ passport.use(
 
         // if not, create one
         const newUser = await pool.query(
-          "INSERT INTO users (username, email, is_verified, using_oauth) VALUES ($1, $2, $3, $4) RETURNING *",
-          [profile.displayName, profile.emails[0].value, true, true]
+          "INSERT INTO users (username, email, is_verified, using_oauth, is_onboarded) VALUES ($1, $2, $3, $4, $5) RETURNING *",
+          [profile.displayName, profile.emails[0].value, true, true, false]
         );
 
         return done(null, newUser.rows[0]);
