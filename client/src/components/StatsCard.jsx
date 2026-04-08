@@ -60,7 +60,7 @@ function StatsCard({ title, value, loading, suffix = '', prefix = '', icon = '' 
           margin: 0,
           lineHeight: '1.2'
         }}>
-          {prefix}{value !== null && value !== undefined ? value : '—'}{suffix}
+          {prefix}{value !== null && value !== undefined ? value : '-'}{suffix}
         </p>
       )}
     </div>

@@ -7,7 +7,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser]           = useState(null);
   const [userid, setUserid]       = useState(null);
   const [loading, setLoading]     = useState(true);
-  // Start as false — always verify from server on load so stale localStorage
+  // Start as false - always verify from server on load so stale localStorage
   // can never cause an instant redirect to /dashboard
   const [isOnboarded, setIsOnboarded] = useState(false);
 
@@ -30,9 +30,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // On mount: decode token, load user data, then verify is_onboarded from server.
-  // We await both calls so loading stays true until we have a real answer —
-  // this prevents OnboardingRoute from seeing loading=false with a stale isOnboarded.
   useEffect(() => {
     const init = async () => {
       const token = localStorage.getItem("token");
@@ -51,7 +48,11 @@ export const AuthProvider = ({ children }) => {
           return;
         }
 
-        // Load user profile and verify onboarding status in parallel
+        // Set userid immediately from token
+        // Dashboard useEffects depend on userid; if it's null they return early and never re-fire when navigating from onboarding without a page refresh
+        setUserid(decoded.user);
+
+        // Load username + verify onboarding status from server in parallel
         await Promise.all([
           getUserData(decoded.user),
           (async () => {
@@ -91,11 +92,32 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem("is_onboarded", String(is_onboarded));
     setUser(userData);
     setIsOnboarded(is_onboarded);
+    try {
+      const decoded = jwtDecode(token);
+      setUserid(decoded.user);
+    } catch (e) {
+      console.error("login: failed to decode token for userid", e);
+    }
   };
 
   const markOnboarded = () => {
     localStorage.setItem("is_onboarded", "true");
     setIsOnboarded(true);
+    // Ensure userid/user are populated before navigating to dashboard
+    // getUserData() is async on mount and may not have resolved yet when onboarding finishes, leaving userid null and breaking all fetches
+    if (!userid) {
+      try {
+        const token = localStorage.getItem("token");
+        if (token) {
+          const decoded = jwtDecode(token);
+          const uid = decoded.user;
+          setUserid(uid);
+          getUserData(uid);
+        }
+      } catch (e) {
+        console.error("markOnboarded: failed to decode token", e);
+      }
+    }
   };
 
   const logout = () => {

@@ -34,7 +34,6 @@ function Register() {
     // Check for uppercase letter
     if (/[A-Z]/.test(pwd)) score++;
     
-    // Check for length > 8
     if (pwd.length > 8) score++;
     
     if (score === 4) return { level: 'strong', color: '#10b981' };

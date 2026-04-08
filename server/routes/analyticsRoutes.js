@@ -4,10 +4,6 @@ import "dotenv/config";
 
 const router = express.Router();
 
-// =====================================================================================
-//                           HELPER: CONVERT WEIGHTED ELO TO LETTER GRADE
-// =====================================================================================
-
 function eloToGrade(elo) {
   if (!elo) return 'U';
   if (elo >= 1800) return 'A*';
@@ -19,36 +15,27 @@ function eloToGrade(elo) {
   return 'U';
 }
 
-// =====================================================================================
-//                           DASHBOARD STATS (single aggregated endpoint)
-//                           Returns: accuracy, totalQuestions, studyTime,
-//                                    currentStreak, predictedGrade (letter),
-//                                    weightedElo, daysUntilExam
-// =====================================================================================
-
+// Returns aggregated dashboard stats: accuracy, total questions, study time, streak, predicted grade and days until exam
 router.get("/dashboard-stats/:userid", async (req, res) => {
   try {
     const { userid } = req.params;
 
-    // ── Core stats from question_attempts ───────────────────────────────
     const coreStats = await pool.query(`
       SELECT
-        COUNT(*)                                                          AS total_questions,
+        COUNT(*) AS total_questions,
         ROUND((SUM(marks_awarded)::numeric / NULLIF(SUM(marks_available), 0)) * 100.0, 1) AS accuracy,
-        ROUND(SUM(time_taken) / 60.0, 0)                                 AS study_time_mins
+        ROUND(SUM(time_taken) / 60.0, 0) AS study_time_mins
       FROM question_attempts
       WHERE userid = $1
         AND grading_status != 'pending'
     `, [userid]);
 
-    // ── Streak: verbatim from the working /streak route ─────────────────
-    const streakDatesResult = await pool.query(
-      `SELECT DISTINCT DATE(attempted_at) AS date
-       FROM question_attempts
-       WHERE userid = $1
-       ORDER BY date DESC`,
-      [userid]
-    );
+    const streakDatesResult = await pool.query(`
+      SELECT DISTINCT DATE(attempted_at) AS date
+      FROM question_attempts
+      WHERE userid = $1
+      ORDER BY date DESC
+    `, [userid]);
 
     let streak = 0;
 
@@ -73,20 +60,14 @@ router.get("/dashboard-stats/:userid", async (req, res) => {
       }
     }
 
-    // ── Predicted grade: weighted average ELO across ATTEMPTED topics only ──────
-    // Excluding 'new' (never-attempted) topics so a quiz of 8 questions moves
-    // the needle visibly instead of being diluted across all 73 seeded topics.
-    // Falls back to full average only if user has never answered anything yet.
     const gradeResult = await pool.query(`
       SELECT
         ROUND(
           COALESCE(
-            -- Primary: only topics the user has actually attempted
             NULLIF(
               SUM(CASE WHEN utm.fsrs_state != 'new' THEN utm.elo_rating * t.exam_weight END) /
               NULLIF(SUM(CASE WHEN utm.fsrs_state != 'new' THEN t.exam_weight END), 0),
             NULL),
-            -- Fallback: all topics (used only before first quiz)
             SUM(utm.elo_rating * t.exam_weight) / NULLIF(SUM(t.exam_weight), 0)
           )
         )::integer AS weighted_elo
@@ -101,8 +82,6 @@ router.get("/dashboard-stats/:userid", async (req, res) => {
     const weightedEloRounded = weightedElo ? Math.round(weightedElo) : null;
     const predictedGrade = eloToGrade(weightedEloRounded);
 
-    // ── Days until exam: reads exam_date from users table if it exists ───
-    // Falls back to a fixed placeholder if column doesn't exist
     let daysUntilExam = null;
     try {
       const examResult = await pool.query(`
@@ -114,7 +93,7 @@ router.get("/dashboard-stats/:userid", async (req, res) => {
         daysUntilExam = Math.max(0, Math.ceil((exam - now) / (1000 * 60 * 60 * 24)));
       }
     } catch (_) {
-      // exam_date column may not exist yet — silently ignore
+      // exam_date column may not exist yet
     }
 
     const core = coreStats.rows[0];
@@ -134,10 +113,7 @@ router.get("/dashboard-stats/:userid", async (req, res) => {
   }
 });
 
-// =====================================================================================
-//                           TOPIC ELOs
-// =====================================================================================
-
+// Returns ELO rating and exam weight for every topic the user has attempted
 router.get("/topic-elos/:userid", async (req, res) => {
   try {
     const { userid } = req.params;
@@ -155,15 +131,12 @@ router.get("/topic-elos/:userid", async (req, res) => {
     `, [userid]);
     res.json(result.rows);
   } catch (error) {
-    console.error("Error fetching topic elos:", error);
+    console.error("Error fetching topic ELOs:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// =====================================================================================
-//                           QUESTIONS ANSWERED
-// =====================================================================================
-
+// Returns the total number of questions the user has attempted
 router.get("/questions-answered/:userid", async (req, res) => {
   try {
     const { userid } = req.params;
@@ -178,10 +151,7 @@ router.get("/questions-answered/:userid", async (req, res) => {
   }
 });
 
-// =====================================================================================
-//                           CONFIDENCE LEVELS (by topic)
-// =====================================================================================
-
+// Returns average confidence per topic
 router.get("/confidence/:userid", async (req, res) => {
   try {
     const { userid } = req.params;
@@ -198,10 +168,7 @@ router.get("/confidence/:userid", async (req, res) => {
   }
 });
 
-// =====================================================================================
-//                           PREDICTED GRADE (raw weighted ELO + letter)
-// =====================================================================================
-
+// Returns the user's current weighted ELO and predicted grade letter
 router.get("/predicted-grade/:userid", async (req, res) => {
   try {
     const { userid } = req.params;
@@ -223,20 +190,14 @@ router.get("/predicted-grade/:userid", async (req, res) => {
         AND t.exam_weight > 0
     `, [userid]);
     const weighted_elo = result.rows[0]?.weighted_elo || null;
-    res.json({
-      weighted_elo,
-      grade: eloToGrade(weighted_elo)
-    });
+    res.json({ weighted_elo, grade: eloToGrade(weighted_elo) });
   } catch (error) {
     console.error("Error fetching predicted grade:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// =====================================================================================
-//                           QUESTION ATTEMPTS
-// =====================================================================================
-
+// Returns all question attempts for the user in chronological order
 router.get("/question-attempts/:userid", async (req, res) => {
   try {
     const { userid } = req.params;
@@ -255,10 +216,7 @@ router.get("/question-attempts/:userid", async (req, res) => {
   }
 });
 
-// =====================================================================================
-//                           STREAK
-// =====================================================================================
-
+// Returns the user's current and longest study streaks in days
 router.get("/streak/:userid", async (req, res) => {
   try {
     const { userid } = req.params;
@@ -276,7 +234,6 @@ router.get("/streak/:userid", async (req, res) => {
 
     const dates = datesResult.rows.map(r => new Date(r.date));
 
-    // Current streak
     let currentStreak = 0;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -289,7 +246,6 @@ router.get("/streak/:userid", async (req, res) => {
       else break;
     }
 
-    // Longest streak
     let longestStreak = 0, tempStreak = 1;
     for (let i = 0; i < dates.length - 1; i++) {
       const diff = Math.floor((dates[i] - dates[i + 1]) / 86400000);
@@ -305,10 +261,7 @@ router.get("/streak/:userid", async (req, res) => {
   }
 });
 
-// =====================================================================================
-//                           LEARNING VELOCITY
-// =====================================================================================
-
+// Returns average questions per day for the last 7 days and the percentage trend vs the prior 7 days
 router.get("/learning-velocity/:userid", async (req, res) => {
   try {
     const { userid } = req.params;
@@ -342,25 +295,17 @@ router.get("/learning-velocity/:userid", async (req, res) => {
   }
 });
 
-// =====================================================================================
-//                           GRADE PROGRESS OVER TIME
-//
-//   Reads from user_elo_snapshots — one row per active day maintained by the
-//   trigger_snapshot_elo trigger on user_topic_mastery. Each row stores the
-//   end-of-day weighted ELO: SUM(elo * exam_weight) / SUM(exam_weight) across
-//   all studied topics. Window functions add cumulative and day-on-day ELO change.
-// =====================================================================================
-
+// Returns daily weighted ELO snapshots with cumulative and day-on-day change
 router.get("/grade-progress/:userid", async (req, res) => {
   try {
     const { userid } = req.params;
     const result = await pool.query(`
       SELECT
-        snapshot_date                                                              AS date,
+        snapshot_date AS date,
         weighted_elo,
         topics_included,
-        weighted_elo - FIRST_VALUE(weighted_elo) OVER (ORDER BY snapshot_date)   AS elo_change_from_start,
-        weighted_elo - LAG(weighted_elo)         OVER (ORDER BY snapshot_date)   AS elo_change_from_prev
+        weighted_elo - FIRST_VALUE(weighted_elo) OVER (ORDER BY snapshot_date) AS elo_change_from_start,
+        weighted_elo - LAG(weighted_elo) OVER (ORDER BY snapshot_date) AS elo_change_from_prev
       FROM user_elo_snapshots
       WHERE userid = $1
       ORDER BY snapshot_date ASC
@@ -372,15 +317,7 @@ router.get("/grade-progress/:userid", async (req, res) => {
   }
 });
 
-// =====================================================================================
-//                           TOPIC CALIBRATION
-//
-//   Returns per-topic: avg confidence, accuracy, calibration score, and parent grouping.
-//   Calibration = 100 - |confidence_as_pct - accuracy|
-//   where confidence 1-5 is mapped to 0-100% via (conf-1)/4*100.
-//   High calibration = self-assessment closely matches actual performance.
-// =====================================================================================
-
+// Returns per-topic accuracy, average confidence and calibration score for the last 30 days
 router.get("/topic-calibration/:userid", async (req, res) => {
   try {
     const { userid } = req.params;
@@ -389,22 +326,18 @@ router.get("/topic-calibration/:userid", async (req, res) => {
         qt.topic_code,
         t.topic_name,
         t.parent_topic,
-        pt.topic_name                                                              AS parent_topic_name,
-        ROUND(AVG(qa.confidence)::numeric, 2)                                     AS avg_confidence,
-        -- Accuracy = marks scored / marks available (last 30 days), expressed as 0-100%
-        ROUND(
-          (SUM(qa.marks_awarded)::numeric / NULLIF(SUM(qa.marks_available), 0)) * 100.0
-        , 1)                                                                       AS accuracy,
+        pt.topic_name AS parent_topic_name,
+        ROUND(AVG(qa.confidence)::numeric, 2) AS avg_confidence,
+        ROUND((SUM(qa.marks_awarded)::numeric / NULLIF(SUM(qa.marks_available), 0)) * 100.0, 1) AS accuracy,
         ROUND(GREATEST(0, 100 - ABS(
           ((AVG(qa.confidence) - 1.0) / 4.0) * 100.0
           - (SUM(qa.marks_awarded)::numeric / NULLIF(SUM(qa.marks_available), 0)) * 100.0
-        ))::numeric, 0)                                                            AS calibration_score,
-        -- Positive = overconfident, Negative = underconfident
+        ))::numeric, 0) AS calibration_score,
         ROUND((
           ((AVG(qa.confidence) - 1.0) / 4.0) * 100.0
           - (SUM(qa.marks_awarded)::numeric / NULLIF(SUM(qa.marks_available), 0)) * 100.0
-        )::numeric, 1)                                                             AS calibration_gap,
-        COUNT(*)                                                                   AS attempt_count
+        )::numeric, 1) AS calibration_gap,
+        COUNT(*) AS attempt_count
       FROM question_attempts qa
       JOIN question_topics qt ON qa.questionid = qt.questionid
       JOIN topics t ON qt.topic_code = t.topic_code
@@ -422,22 +355,19 @@ router.get("/topic-calibration/:userid", async (req, res) => {
   }
 });
 
-// =====================================================================================
-//                           SUMMARY
-// =====================================================================================
-
+// Returns a high-level summary of the user's overall activity and performance
 router.get("/summary/:userid", async (req, res) => {
   try {
     const { userid } = req.params;
 
     const summary = await pool.query(`
       SELECT
-        COUNT(DISTINCT qa.attemptid)                                              AS total_questions,
-        COUNT(DISTINCT DATE(qa.attempted_at))                                     AS days_active,
-        (AVG(CASE WHEN qa.is_correct THEN 1 ELSE 0 END) * 100)::numeric(5,2)     AS accuracy,
-        AVG(qa.confidence)::numeric(4,2)                                          AS avg_confidence,
-        AVG(CASE WHEN qa.time_taken > 0 THEN qa.time_taken END)::numeric(10,2)   AS avg_time_taken,
-        COUNT(DISTINCT qa.questionid)                                             AS unique_questions
+        COUNT(DISTINCT qa.attemptid) AS total_questions,
+        COUNT(DISTINCT DATE(qa.attempted_at)) AS days_active,
+        (AVG(CASE WHEN qa.is_correct THEN 1 ELSE 0 END) * 100)::numeric(5,2) AS accuracy,
+        AVG(qa.confidence)::numeric(4,2) AS avg_confidence,
+        AVG(CASE WHEN qa.time_taken > 0 THEN qa.time_taken END)::numeric(10,2) AS avg_time_taken,
+        COUNT(DISTINCT qa.questionid) AS unique_questions
       FROM question_attempts qa
       WHERE qa.userid = $1
     `, [userid]);
@@ -457,14 +387,7 @@ router.get("/summary/:userid", async (req, res) => {
   }
 });
 
-// =====================================================================================
-//                           TOPIC MASTERY SNAPSHOTS
-//
-//   Returns daily ELO history per topic for a user. Used for per-topic
-//   improvement charts and the radar chart history view.
-//   Optionally filter to a single topic via ?topicid=123
-// =====================================================================================
-
+// Returns daily ELO history per topic. Optionally filter to a single topic via ?topicid=123
 router.get("/topic-snapshots/:userid", async (req, res) => {
   try {
     const { userid } = req.params;
@@ -476,18 +399,16 @@ router.get("/topic-snapshots/:userid", async (req, res) => {
         t.topic_code,
         t.topic_name,
         t.parent_topic,
-        tms.snapshot_date                                                        AS date,
+        tms.snapshot_date AS date,
         tms.elo_rating,
-        -- Day-on-day ELO change per topic
         tms.elo_rating - LAG(tms.elo_rating) OVER (
           PARTITION BY tms.userid, tms.topicid
           ORDER BY tms.snapshot_date
-        )                                                                        AS elo_change_from_prev,
-        -- Total gain per topic from first recorded day
+        ) AS elo_change_from_prev,
         tms.elo_rating - FIRST_VALUE(tms.elo_rating) OVER (
           PARTITION BY tms.userid, tms.topicid
           ORDER BY tms.snapshot_date
-        )                                                                        AS elo_change_from_start
+        ) AS elo_change_from_start
       FROM topic_mastery_snapshots tms
       JOIN topics t ON tms.topicid = t.topicid
       WHERE tms.userid = $1

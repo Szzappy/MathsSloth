@@ -33,14 +33,13 @@ const OAuthSuccess = () => {
           navigate(data.is_onboarded ? '/dashboard' : '/onboarding', { replace: true });
         }, 1500);
       } catch {
-        // /auth/me unavailable — safe fallback: store token, send to onboarding
         login(token, null, false);
         setTimeout(() => navigate('/onboarding', { replace: true }), 1500);
       }
     };
 
     resolve();
-  }, [token, navigate]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [token, navigate]); 
 
   return (
     <div style={{
