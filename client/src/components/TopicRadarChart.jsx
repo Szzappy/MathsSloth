@@ -32,7 +32,7 @@ function TopicRadarChart({ userid, width = 700, height = 650, levels = 5 }) {
 
           if (!parentTopics[parentKey]) {
             parentTopics[parentKey] = {
-              topic_name: `${parentKey} – ${parentName}`,
+              topic_name: `${parentKey} - ${parentName}`,
               topic_code: parentKey,
               elo_ratings: [],
             };
@@ -239,8 +239,8 @@ function TopicRadarChart({ userid, width = 700, height = 650, levels = 5 }) {
             const x = labelRadius * Math.sin(angle);
             const y = labelRadius * Math.cos(angle);
 
-            const [code, ...nameParts] = topic.topic_name.split(' – ');
-            const name = nameParts.join(' – ');
+            const [code, ...nameParts] = topic.topic_name.split(' - ');
+            const name = nameParts.join(' - ');
             const anchor = x > 5 ? 'start' : x < -5 ? 'end' : 'middle';
 
             // Split name into two lines if longer than 14 chars
@@ -277,7 +277,7 @@ function TopicRadarChart({ userid, width = 700, height = 650, levels = 5 }) {
                 >
                   {code}
                 </text>
-                {/* Name — one or two lines */}
+                {/* Name - one or two lines */}
                 {nameLines.map((line, li) => (
                   <text
                     key={li}

@@ -55,7 +55,7 @@ function GptInput() {
     const hint = hints[index];
     if (!hint?.hintId) return;
 
-    // Update immediately — hint stays visible
+    // Update immediately - hint stays visible
     setHints(prev => prev.map((h, i) => i === index ? { ...h, rating: helpful } : h));
 
     try {
@@ -79,7 +79,7 @@ function GptInput() {
       padding: '24px',
     }}>
 
-      {/* Header — orange to distinguish from other components */}
+      {/* Header - orange to distinguish from other components */}
       <h3 style={{
         color: '#f97316',
         fontSize: '20px',
@@ -96,7 +96,7 @@ function GptInput() {
         Stuck on this question? Tell Slothrates what you've tried and get a helpful hint!
       </p>
 
-      {/* Previous hints — persist after rating */}
+      {/* Previous hints - persist after rating */}
       {hints.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
           {hints.map((hint, i) => (

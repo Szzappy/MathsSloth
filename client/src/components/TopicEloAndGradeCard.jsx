@@ -7,7 +7,7 @@ const getGradeFromElo = (elo) => {
   if (elo >= 1200) return { grade: 'C',  color: '#3b82f6' };
   if (elo >= 1000) return { grade: 'D',  color: '#8b5cf6' };
   if (elo >= 800)  return { grade: 'E',  color: '#f97316' };
-  return               { grade: 'U',  color: '#ef4444' };
+  return { grade: 'U',  color: '#ef4444' };
 };
 
 function groupByParent(topics) {

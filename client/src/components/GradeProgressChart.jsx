@@ -74,7 +74,7 @@ function GradeProgressChart({ userid, width = 750, height = 340 }) {
 
   if (progressData.length === 0) return (
     <div style={cardStyle}>
-      <div style={centeredMsg}>No progress data yet — answer some questions to see your grade trend.</div>
+      <div style={centeredMsg}>No progress data yet - answer some questions to see your grade trend.</div>
     </div>
   );
 
@@ -203,7 +203,6 @@ function GradeProgressChart({ userid, width = 750, height = 340 }) {
             curve={curveMonotoneX}
           />
 
-          {/* Line drawn as path manually for colour based on grade */}
           <Line
             data={progressData}
             x={d => dateScale(d.date)}
@@ -287,7 +286,7 @@ function GradeProgressChart({ userid, width = 750, height = 340 }) {
             <div>
               <div style={{ color: '#6b7280', fontSize: 10 }}>DAY CHANGE</div>
               <div style={{ color: tooltipData.eloChangeFromPrev === null ? '#6b7280' : tooltipData.eloChangeFromPrev >= 0 ? '#10b981' : '#ef4444', fontWeight: 700, fontSize: 16 }}>
-                {tooltipData.eloChangeFromPrev === null ? '—' : (tooltipData.eloChangeFromPrev >= 0 ? '+' : '') + tooltipData.eloChangeFromPrev}
+                {tooltipData.eloChangeFromPrev === null ? '-' : (tooltipData.eloChangeFromPrev >= 0 ? '+' : '') + tooltipData.eloChangeFromPrev}
               </div>
             </div>
             <div>

@@ -43,9 +43,7 @@ export const QuizProvider = ({ children }) => {
 
   const API_URL = import.meta.env.VITE_API_URL;
 
-  // ============================================================
-  //  HELPERS
-  // ============================================================
+  // HELPERS ---------------------------------------------------------------------------------------------------
 
   const getActiveQuestion = () => {
     const q = quiz[currentQuestion - 1];
@@ -86,9 +84,7 @@ export const QuizProvider = ({ children }) => {
     setCanSubmit(hasConfidence && hasAnswer);
   }, [confidence, selectedOption, userAnswer, currentQuestion, currentPart, showAnswerCard, quiz]);
 
-  // ============================================================
-  //  QUIZ LOADING
-  // ============================================================
+  // QUIZ LOADING ---------------------------------------------------------------------------------------------------
 
   const setCustomParameters = (quizMode, topics, numQuestions, lowerDifficulty, upperDifficulty, usingAdaptiveDifficulty) => {
     setQuizMode(quizMode);
@@ -180,9 +176,7 @@ export const QuizProvider = ({ children }) => {
     }
   };
 
-  // ============================================================
-  //  ANSWER SUBMISSION
-  // ============================================================
+  // ANSWER SUBMISSION ---------------------------------------------------------------------------------------------------
 
   // self_mark: fetch mark scheme and show interactive marking UI
   const getAnswer = async () => {
@@ -209,7 +203,7 @@ export const QuizProvider = ({ children }) => {
 
     try {
       if (activeQ.question_format === 'feynman') {
-        // ── FEYNMAN: submit to pending endpoint, then trigger AI grading ──
+        // FEYNMAN: submit to pending endpoint, then trigger AI grading
         setIsSubmitting(true);
         const response = await fetch(`${API_URL}/quiz/answer/feynman`, {
           method: 'POST',
@@ -225,7 +219,6 @@ export const QuizProvider = ({ children }) => {
         });
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data = await response.json();
-        // Grading is now synchronous — marks_awarded and feedback come back immediately
         setAnswerResult({ ...data, type: 'feynman', user_answer: userAnswer });
         setGradingStatus(data.grading_status ?? 'graded');
         setShowAnswerCard(true);
@@ -233,7 +226,7 @@ export const QuizProvider = ({ children }) => {
         setIsSubmitting(false);
 
       } else if (activeQ.question_format === 'multiple_choice') {
-        // ── MCQ: server auto-grades, returns is_correct + correct_answer ──
+        // MCQ: server auto-grades, returns is_correct + correct_answer
         const response = await fetch(`${API_URL}/quiz/answer`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -254,7 +247,7 @@ export const QuizProvider = ({ children }) => {
           marks_awarded: data.marks_awarded,
           marks_available: data.marks_available,
           correct_answer: data.correct_answer,
-          user_answer: selectedOption,   // ← store selected label directly for highlighting
+          user_answer: selectedOption, 
           type: 'multiple_choice'
         });
         setGradingStatus('graded');
@@ -267,33 +260,10 @@ export const QuizProvider = ({ children }) => {
     }
   };
 
-  const gradeFeynman = async (attemptId, questionId) => {
-    try {
-      const response = await fetch(`${API_URL}/hints/grade-feynman`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ attemptId, userId: userid, questionId })
-      });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const data = await response.json();
-      setAnswerResult(prev => ({
-        ...prev,
-        marks_awarded: data.marks_awarded,
-        feedback: data.feedback,
-      }));
-      setGradingStatus('graded');
-    } catch (error) {
-      console.error("Error grading feynman answer:", error);
-      setGradingStatus('failed');
-    }
-  };
+  //  SILLY MISTAKE ---------------------------------------------------------------------------------------------------
 
-  // ============================================================
-  //  SILLY MISTAKE
   //  Re-submits the last MCQ attempt with silly_mistake=true so the
   //  backend can halve the ELO penalty via a corrective INSERT.
-  // ============================================================
-
   const reportSillyMistake = async () => {
     const activeQ = getActiveQuestion();
     if (!activeQ || !answerResult) return;
@@ -312,9 +282,7 @@ export const QuizProvider = ({ children }) => {
     }
   };
 
-  // ============================================================
-  //  NAVIGATION
-  // ============================================================
+  // NAVIGATION ---------------------------------------------------------------------------------------------------
 
   const nextQuestion = () => {
     const q = quiz[currentQuestion - 1];
@@ -342,9 +310,7 @@ export const QuizProvider = ({ children }) => {
     setGradingStatus(null);
   };
 
-  // ============================================================
-  //  MATHS RENDERING
-  // ============================================================
+  // MATHS RENDERING ---------------------------------------------------------------------------------------------------
 
   const renderQuestionWithMaths = (text) => {
     if (!text) return null;

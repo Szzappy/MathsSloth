@@ -1,3 +1,5 @@
+// THIS FILE IS NOT USED IN THE FINAL IMPLEMENTATION
+
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import dotenv from 'dotenv';
 

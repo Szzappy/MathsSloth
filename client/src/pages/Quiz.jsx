@@ -30,7 +30,7 @@ function Quiz() {
   }, [userid]);
 
   // Scroll to top when advancing to the next question or next part
-  // (not when the mark scheme appears — that should stay in place)
+  // (not when the mark scheme appears - that should stay in place)
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [currentQuestion, currentPart]);
@@ -76,13 +76,13 @@ function Quiz() {
         ) : (
           // ── Active quiz ──
           <div>
-            {/* Question card — handles rendering parts internally */}
+            {/* Question card - handles rendering parts internally */}
             <QuestionCard key={`${topLevelQuestion.questionid}-${currentPart}`} />
 
-            {/* Answer card — shown after submission */}
+            {/* Answer card - shown after submission */}
             {showAnswerCard && <AnswerCard />}
 
-            {/* Hints — only before answer is revealed, not for feynman (they're typing an explanation) */}
+            {/* Hints - only before answer is revealed, not for feynman (they're typing an explanation) */}
             {!showAnswerCard && activePart?.question_format !== 'feynman' && (
               <div style={{ marginTop: '2rem' }}>
                 <GptInput />
@@ -101,7 +101,7 @@ function Quiz() {
               color: '#9ca3af',
             }}>
               {questionHasParts
-                ? `Question ${currentQuestion} of ${quiz.length} — Part ${currentPart + 1} of ${topLevelQuestion.parts.length}`
+                ? `Question ${currentQuestion} of ${quiz.length} - Part ${currentPart + 1} of ${topLevelQuestion.parts.length}`
                 : `Question ${currentQuestion} of ${quiz.length}`
               }
 

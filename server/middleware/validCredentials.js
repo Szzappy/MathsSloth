@@ -13,6 +13,7 @@ export default function(req, res, next) {
     return typeof userName === 'string' && userName.length >= 3 && userName.length <= 30;
   }
 
+  // validate based on route
   if (req.path === "/register") {
     if (![email, username, password].every(Boolean))
       return res.status(401).json("Missing Credentials");

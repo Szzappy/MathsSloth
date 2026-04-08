@@ -22,17 +22,18 @@ import OnboardingPage from './pages/Onboarding.jsx';
 // replace makes it so that the history is just ['/login']
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem('token');
-  return token ? children : <Navigate to="/login" replace />;
+  if (!token) return <Navigate to="/login" replace />;
+  const { isOnboarded, loading } = useAuth();
+  if (loading) return null;
+  if (!isOnboarded) return <Navigate to="/onboarding" replace />;
+  return children;
 }
 
-// Onboarding route: must be logged in, but redirects away if already onboarded.
-// Reads from AuthContext (not raw localStorage) so stale storage values don't
-// cause an instant redirect before the wizard even mounts.
+// Onboarding route: must be logged in, but redirects away if already onboarded
 function OnboardingRoute({ children }) {
   const token = localStorage.getItem('token');
   if (!token) return <Navigate to="/login" replace />;
   const { isOnboarded, loading } = useAuth();
-  // Wait for AuthContext to hydrate before deciding — prevents flash redirect
   if (loading) return null;
   if (isOnboarded) return <Navigate to="/dashboard" replace />;
   return children;

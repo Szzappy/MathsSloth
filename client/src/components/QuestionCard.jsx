@@ -40,9 +40,7 @@ function CompletedPart({ part, index, renderQuestionWithMaths }) {
 }
 
 function MCQOptions({ options, selectedOption, setSelectedOption }) {
-  // Shuffle once on mount — stable across re-renders for this question instance.
-  // originalLabel is preserved for server submission (correct_answer comparison).
-  // displayLabel is reassigned A/B/C/D sequentially after shuffling.
+  // Shuffle once on mount - stable across re-renders for this question instance
   const shuffled = useMemo(() => {
     const arr = [...options];
     for (let i = arr.length - 1; i > 0; i--) {
@@ -52,8 +50,8 @@ function MCQOptions({ options, selectedOption, setSelectedOption }) {
     const displayLetters = ['A', 'B', 'C', 'D', 'E'];
     return arr.map((opt, i) => ({
       ...opt,
-      originalLabel: opt.label,        // keep for server submission
-      displayLabel: displayLetters[i],  // always A, B, C, D in display order
+      originalLabel: opt.label, // keep for server submission
+      displayLabel: displayLetters[i], // always A, B, C, D in display order
     }));
   }, [options]);
 
@@ -214,7 +212,7 @@ function ConfidenceSelector({ confidence, setConfidence }) {
                 style={{ marginRight: '10px', accentColor: '#4fb8c8', cursor: 'pointer' }}
               />
               <span style={{ fontSize: '18px', marginRight: '10px' }}>{emoji}</span>
-              <span style={{ fontWeight: '500', fontSize: '14px' }}>{value} – {label}</span>
+              <span style={{ fontWeight: '500', fontSize: '14px' }}>{value} - {label}</span>
             </label>
           );
         })}
@@ -308,9 +306,9 @@ function QuestionCard() {
   const format = activeQuestion?.question_format;
 
   const FORMAT_COLORS = {
-    multiple_choice: '#3b82f6',  // blue
-    self_mark:       '#10b981',  // green
-    feynman:         '#8b5cf6',  // purple
+    multiple_choice: '#3b82f6', // blue
+    self_mark: '#10b981', // green
+    feynman: '#8b5cf6', // purple
   };
   const formatColor = FORMAT_COLORS[format] ?? '#9ca3af';
 
@@ -344,7 +342,7 @@ function QuestionCard() {
           Question {currentQuestion}
           {questionHasParts && (
             <span style={{ color: '#9ca3af', fontSize: '16px', fontWeight: 'normal', marginLeft: '8px' }}>
-              — Part {activeQuestion?.part_label || String.fromCharCode(97 + currentPart)}
+              - Part {activeQuestion?.part_label || String.fromCharCode(97 + currentPart)}
             </span>
           )}
         </h1>
@@ -383,7 +381,7 @@ function QuestionCard() {
         </div>
       )}
 
-      {/* Completed parts — text only, greyed */}
+      {/* Completed parts - text only, greyed */}
       {allDoneParts.map((part, i) => (
         <CompletedPart
           key={part.questionid || i}
@@ -393,7 +391,7 @@ function QuestionCard() {
         />
       ))}
 
-      {/* Active question text — always visible so it stays readable during mark scheme review */}
+      {/* Active question text */}
       <div style={{ marginBottom: '20px' }}>
         {questionHasParts && (
           <p style={sectionLabel('#a78bfa')}>
@@ -405,7 +403,7 @@ function QuestionCard() {
         </div>
       </div>
 
-      {/* Image (standalone only) — always visible */}
+      {/* Image (standalone only) - always visible */}
       {!questionHasParts && topLevelQuestion.image_url && (
         <div style={{ marginBottom: '20px', textAlign: 'center' }}>
           <img
@@ -416,7 +414,7 @@ function QuestionCard() {
         </div>
       )}
 
-      {/* Input controls — hidden once answer card / mark scheme is shown */}
+      {/* Input controls*/}
       {!showAnswerCard && (
         <>
           {/* MCQ options */}

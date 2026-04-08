@@ -89,7 +89,6 @@ function ForgotPassword() {
           </div>
 
           {!emailSent ? (
-            // BEFORE: Request reset form
             <>
               {/* Info Box */}
               <div style={{
@@ -193,7 +192,6 @@ function ForgotPassword() {
               </form>
             </>
           ) : (
-            // AFTER: Success message
             <>
               {/* Success Info Box */}
               <div style={{

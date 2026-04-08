@@ -32,7 +32,7 @@ function Analytics() {
       try {
         const response = await fetch(`${API_URL}/analytics/predicted-grade/${userid}`);
         const data = await response.json();
-        // API returns { weighted_elo, grade } — store weighted_elo for display
+        // API returns { weighted_elo, grade } - store weighted_elo for display
         setPredictedGrade(data.weighted_elo);
       } catch (error) {
         console.error("Error fetching predicted grade:", error);

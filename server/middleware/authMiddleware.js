@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import "dotenv/config";
 
+// Middleware to protect routes and ensure user is authenticated
 const authMiddleware = async (req, res, next) => {
   try {
     const jwtToken = req.header('token');

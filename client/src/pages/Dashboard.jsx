@@ -4,7 +4,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { useQuiz } from '../contexts/QuizContext';
 import QuizSetupModal from '../components/QuizSetupModal';
 
-// Grade colour palette — matches analytics.js / TopicEloAndGradeCard
 const GRADE_COLORS = {
   'A*': '#f59e0b',  // gold
   'A':  '#10b981',  // green
@@ -32,7 +31,7 @@ const getGradeColor = (grade) => GRADE_COLORS[grade] ?? '#9ca3af';
 const gradeProgress = (elo, grade) => {
   const band = GRADE_THRESHOLDS.find(t => t.grade === grade);
   if (!band || !elo) return 0;
-  if (band.max === Infinity) return 1; // A* — already there
+  if (band.max === Infinity) return 1; // A* - already there
   return Math.min(1, Math.max(0, (elo - band.min) / (band.max - band.min)));
 };
 
@@ -56,7 +55,7 @@ function Dashboard() {
     accuracy: 0,
     totalQuestions: 0,
     streak: 0,
-    predictedGrade: '—',
+    predictedGrade: '-',
     weightedElo: 0,
     daysUntilExam: null,
   });
@@ -113,7 +112,7 @@ function Dashboard() {
             Welcome Home, {user}!
           </h1>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', color: '#9ca3af', fontSize: '14px' }}>
-            <span>🔥 Daily Streak: {loading ? '—' : `${stats.streak} day${stats.streak !== 1 ? 's' : ''}`}</span>
+            <span>🔥 Daily Streak: {loading ? '-' : `${stats.streak} day${stats.streak !== 1 ? 's' : ''}`}</span>
             <span>•</span>
             <span>
               {stats.daysUntilExam != null
@@ -235,7 +234,6 @@ function Dashboard() {
                 )}
               </div>
 
-              {/* Grade legend pills */}
               {!loading && (
                 <div style={{ display: 'flex', gap: '4px', marginBottom: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
                   {['A*', 'A', 'B', 'C', 'D', 'E', 'U'].map(g => (
@@ -326,7 +324,7 @@ function Dashboard() {
             <StatCard
               emoji="🎯"
               label="Accuracy"
-              value={loading ? '—' : `${stats.accuracy}%`}
+              value={loading ? '-' : `${stats.accuracy}%`}
               sub={loading ? '' : stats.totalQuestions > 0 ? `Over ${stats.totalQuestions} question${stats.totalQuestions !== 1 ? 's' : ''}` : 'No attempts yet'}
               subColor="#9ca3af"
             />
@@ -335,7 +333,7 @@ function Dashboard() {
             <StatCard
               emoji="📝"
               label="Questions Answered"
-              value={loading ? '—' : stats.totalQuestions}
+              value={loading ? '-' : stats.totalQuestions}
               sub={loading ? '' : stats.totalQuestions > 0 ? 'Total attempts' : 'Start a quiz!'}
               subColor="#9ca3af"
             />
@@ -344,7 +342,7 @@ function Dashboard() {
             <StatCard
               emoji="🔥"
               label="Current Streak"
-              value={loading ? '—' : `${stats.streak} day${stats.streak !== 1 ? 's' : ''}`}
+              value={loading ? '-' : `${stats.streak} day${stats.streak !== 1 ? 's' : ''}`}
               sub={loading ? '' : stats.streak > 0 ? 'Keep it going!' : 'Answer a question today!'}
               subColor={stats.streak > 0 ? '#10b981' : '#9ca3af'}
             />
@@ -358,7 +356,7 @@ function Dashboard() {
   );
 }
 
-// ─── Reusable stat card ────────────────────────────────────────
+// Reusable stat card 
 function StatCard({ emoji, label, value, sub, subColor = '#10b981' }) {
   return (
     <div

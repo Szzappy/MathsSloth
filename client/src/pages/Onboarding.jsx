@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { jwtDecode } from 'jwt-decode';
 
-// ── Grade config ──────────────────────────────────────────────────────────────
+// Grade config
 const GRADES = [
   { label: 'A*', center: 1900, color: '#f59e0b', description: 'Distinction' },
   { label: 'A',  center: 1700, color: '#10b981', description: 'Excellent'   },
@@ -14,9 +14,9 @@ const GRADES = [
   { label: 'U',  center: 700,  color: '#ef4444', description: 'Ungraded'    },
 ];
 
-const STRENGTH_DELTA = 100; // ELO above/below center for strong/weak topics
+const STRENGTH_DELTA = 100; // ELO above/below centre for strong/weak topics
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// Helpers
 function eloForTopic(gradeCenter, strength) {
   if (strength === 'strong') return gradeCenter + STRENGTH_DELTA;
   if (strength === 'weak')   return gradeCenter - STRENGTH_DELTA;
@@ -42,14 +42,13 @@ function groupTopicsByParent(topics) {
   return Array.from(parentMap.values())
     .map(group => ({
       ...group,
-      // If no children, use the topic itself as the only selectable item
       children: group.children.length > 0 ? group.children : (group._self ? [group._self] : []),
     }))
     .filter(g => g.children.length > 0)
     .sort((a, b) => a.code.localeCompare(b.code));
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+// Sub-components
 
 function StepIndicator({ step }) {
   const steps = ['Your Grade', 'Topic Strengths', 'Confirm'];
@@ -99,7 +98,7 @@ function Step1_Grade({ selectedGrade, onSelect }) {
       </h2>
       <p style={{ color: '#6b7280', fontSize: 15, margin: '0 0 32px', lineHeight: 1.6 }}>
         This sets your starting ELO so the quiz selects questions at the right difficulty from day one.
-        Be honest — you can always improve from here!
+        Be honest  you can always improve from here!
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 12 }}>
@@ -166,7 +165,7 @@ function Step2_Topics({ topics, topicStrengths, onToggle, gradeColor }) {
       </h2>
       <p style={{ color: '#6b7280', fontSize: 15, margin: '0 0 16px', lineHeight: 1.6 }}>
         Tap a topic once for <span style={{ color: '#10b981', fontWeight: 600 }}>strong ↑</span>, twice for <span style={{ color: '#ef4444', fontWeight: 600 }}>weak ↓</span>, three times to reset.
-        Skip this entirely if you're not sure — the quiz will figure it out.
+        Skip this entirely if you're not sure - the quiz will figure it out.
       </p>
 
       {/* Summary pills */}
@@ -181,15 +180,15 @@ function Step2_Topics({ topics, topicStrengths, onToggle, gradeColor }) {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 380, overflowY: 'auto', paddingRight: 4 }}>
         {grouped.map(group => {
-          const isExpanded = expandedGroups[group.code] ?? false;
-          const groupTopics = group.children.length > 0 ? group.children : [{ topic_code: group.code, topic_name: group.name }];
+          const isExpanded = expandedGroups[group.code] ?? true;
+          const groupTopics = group.children;
           const groupStrengths = groupTopics.map(t => topicStrengths[t.topic_code]).filter(Boolean);
           const allStrong = groupStrengths.length > 0 && groupStrengths.every(s => s === 'strong');
           const allWeak   = groupStrengths.length > 0 && groupStrengths.every(s => s === 'weak');
           const mixed     = groupStrengths.length > 0 && !allStrong && !allWeak;
 
           return (
-            <div key={group.code} style={{ borderRadius: 10, overflow: 'hidden', border: '1px solid #2a2a2a' }}>
+            <div key={group.code} style={{ borderRadius: 10, border: '1px solid #2a2a2a' }}>
               {/* Group header */}
               <div
                 style={{
@@ -197,13 +196,14 @@ function Step2_Topics({ topics, topicStrengths, onToggle, gradeColor }) {
                   padding: '12px 16px',
                   backgroundColor: '#1e1e1e',
                   cursor: 'pointer',
+                  borderRadius: isExpanded ? '10px 10px 0 0' : 10,
                 }}
                 onClick={() => toggleGroup(group.code)}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ color: gradeColor, fontSize: 12, fontWeight: 700, fontFamily: 'monospace' }}>{group.code}</span>
                   <span style={{ color: '#d1d5db', fontSize: 14, fontWeight: 500 }}>{group.name}</span>
-                  {mixed   && <span style={{ fontSize: 11, color: '#f59e0b' }}>mixed</span>}
+                  {mixed    && <span style={{ fontSize: 11, color: '#f59e0b' }}>mixed</span>}
                   {allStrong && <span style={{ fontSize: 11, color: '#10b981' }}>↑ all strong</span>}
                   {allWeak   && <span style={{ fontSize: 11, color: '#ef4444' }}>↓ all weak</span>}
                 </div>
@@ -212,7 +212,7 @@ function Step2_Topics({ topics, topicStrengths, onToggle, gradeColor }) {
 
               {/* Topics */}
               {isExpanded && (
-                <div style={{ backgroundColor: '#171717', borderTop: '1px solid #2a2a2a' }}>
+                <div style={{ backgroundColor: '#171717', borderTop: '1px solid #2a2a2a', padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: 4, borderRadius: '0 0 10px 10px' }}>
                   {groupTopics.map(t => (
                     <TopicRow
                       key={t.topic_code}
@@ -240,14 +240,15 @@ function TopicRow({ topic, strength, onToggle }) {
       onClick={() => onToggle(topic.topic_code)}
       style={{
         width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '10px 16px 10px 24px',
-        backgroundColor: bg,
-        border: 'none', borderBottom: '1px solid #222',
+        padding: '9px 12px 9px 16px',
+        backgroundColor: bg || '#1e1e1e',
+        border: `1px solid ${color ? color + '33' : '#2a2a2a'}`,
+        borderRadius: 8,
         cursor: 'pointer', textAlign: 'left',
         transition: 'all 0.12s',
       }}
       onMouseEnter={(e) => { if (!strength) e.currentTarget.style.backgroundColor = '#252525'; }}
-      onMouseLeave={(e) => { if (!strength) e.currentTarget.style.backgroundColor = 'transparent'; }}
+      onMouseLeave={(e) => { if (!strength) e.currentTarget.style.backgroundColor = bg || '#1e1e1e'; }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{ color: '#4b5563', fontSize: 11, fontFamily: 'monospace', minWidth: 44 }}>{topic.topic_code}</span>
@@ -275,7 +276,7 @@ function Step3_Confirm({ selectedGrade, topicStrengths, topics, onSubmit, loadin
   return (
     <div>
       <h2 style={{ color: '#fff', fontSize: 26, fontWeight: 700, margin: '0 0 8px' }}>
-        Looking good — ready to start?
+        Looking good - ready to start?
       </h2>
       <p style={{ color: '#6b7280', fontSize: 15, margin: '0 0 28px' }}>
         Here's how we'll set up your starting ELO ratings.
@@ -306,7 +307,7 @@ function Step3_Confirm({ selectedGrade, topicStrengths, topics, onSubmit, loadin
             ? <div style={{ color: '#4b5563', fontSize: 13 }}>None selected</div>
             : strongTopics.slice(0, 5).map(t => (
                 <div key={t.topic_code} style={{ color: '#9ca3af', fontSize: 12, marginBottom: 2 }}>
-                  {t.topic_code} — {(gradeObj.center + STRENGTH_DELTA)} ELO
+                  {t.topic_code} - {(gradeObj.center + STRENGTH_DELTA)} ELO
                 </div>
               ))
           }
@@ -318,7 +319,7 @@ function Step3_Confirm({ selectedGrade, topicStrengths, topics, onSubmit, loadin
             ? <div style={{ color: '#4b5563', fontSize: 13 }}>None selected</div>
             : weakTopics.slice(0, 5).map(t => (
                 <div key={t.topic_code} style={{ color: '#9ca3af', fontSize: 12, marginBottom: 2 }}>
-                  {t.topic_code} — {(gradeObj.center - STRENGTH_DELTA)} ELO
+                  {t.topic_code} - {(gradeObj.center - STRENGTH_DELTA)} ELO
                 </div>
               ))
           }
@@ -327,7 +328,7 @@ function Step3_Confirm({ selectedGrade, topicStrengths, topics, onSubmit, loadin
       </div>
 
       <p style={{ color: '#4b5563', fontSize: 13, marginBottom: 24, lineHeight: 1.6 }}>
-        Your ELO will adjust automatically as you answer questions — this is just a starting point to help the algorithm warm up faster.
+        Your ELO will adjust automatically as you answer questions - this is just a starting point to help the algorithm warm up faster.
       </p>
 
       <button
@@ -352,14 +353,12 @@ function Step3_Confirm({ selectedGrade, topicStrengths, topics, onSubmit, loadin
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+// Main component
 export default function OnboardingPage() {
   const API_URL = import.meta.env.VITE_API_URL;
   const navigate = useNavigate();
   const { userid: ctxUserid, markOnboarded } = useAuth();
 
-  // Derive userid directly from token so the submit works even if AuthContext
-  // hasn't finished its async getUserData() call yet
   const userid = ctxUserid ?? (() => {
     try {
       const token = localStorage.getItem('token');
@@ -367,13 +366,13 @@ export default function OnboardingPage() {
     } catch { return null; }
   })();
 
-  const [step, setStep]                 = useState(1);
+  const [step, setStep]                   = useState(1);
   const [selectedGrade, setSelectedGrade] = useState(null);
-  const [topics, setTopics]             = useState([]);
-  const [topicStrengths, setTopicStrengths] = useState({}); // { topic_code: 'strong'|'weak'|null }
-  const [loading, setLoading]           = useState(false);
+  const [topics, setTopics]               = useState([]);
+  const [topicStrengths, setTopicStrengths] = useState({});
+  const [loading, setLoading]             = useState(false);
   const [topicsLoading, setTopicsLoading] = useState(true);
-  const [error, setError]               = useState(null);
+  const [error, setError]                 = useState(null);
 
   const gradeObj = GRADES.find(g => g.label === selectedGrade);
 
@@ -383,7 +382,6 @@ export default function OnboardingPage() {
       try {
         const res = await fetch(`${API_URL}/quiz/topics`);
         const data = await res.json();
-        // Filter out anchor/stem-only topics and sort
         const leafTopics = (data.topics ?? [])
           .sort((a, b) => a.topic_code.localeCompare(b.topic_code));
         setTopics(leafTopics);
@@ -399,7 +397,7 @@ export default function OnboardingPage() {
   const toggleTopicStrength = (topicCode) => {
     setTopicStrengths(prev => {
       const cur = prev[topicCode];
-      if (!cur)           return { ...prev, [topicCode]: 'strong' };
+      if (!cur)             return { ...prev, [topicCode]: 'strong' };
       if (cur === 'strong') return { ...prev, [topicCode]: 'weak'   };
       return { ...prev, [topicCode]: null };
     });
@@ -419,7 +417,6 @@ export default function OnboardingPage() {
 
     const gradeCenter = GRADES.find(g => g.label === selectedGrade).center;
 
-    // Build topic_adjustments: only include topics where user indicated strong/weak
     const topic_adjustments = Object.entries(topicStrengths)
       .filter(([, strength]) => strength)
       .map(([topic_code, strength]) => ({ topic_code, strength }));
@@ -441,7 +438,6 @@ export default function OnboardingPage() {
         throw new Error(data.error ?? 'Onboarding failed');
       }
 
-      // Update AuthContext so ProtectedRoute knows onboarding is done
       markOnboarded();
       navigate('/dashboard');
     } catch (e) {
@@ -546,7 +542,7 @@ export default function OnboardingPage() {
 
         {step === 2 && (
           <p style={{ color: '#4b5563', fontSize: 12, textAlign: 'center', marginTop: 12, marginBottom: 0 }}>
-            You can skip topic selection — just click "Review & Confirm"
+            You can skip topic selection - just click "Review & Confirm"
           </p>
         )}
       </div>
