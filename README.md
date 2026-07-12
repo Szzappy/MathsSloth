@@ -2,18 +2,15 @@
 
 **An adaptive, AI-powered revision platform for A-level Mathematics, built on the same rating systems that power chess.com and Duolingo.**
 
-Maths Sloth schedules every review with FSRS-4.5 (the algorithm behind modern Anki), tracks topic-level ability with the Glicko-2 rating system, and grades free-text explanations with GPT-4o-mini graded against human-tutor agreement. It is a full-stack, data-driven learning platform, not a wrapper around a question bank.
+Maths Sloth schedules every review with FSRS-4.5 (the algorithm behind modern Anki), tracks topic-level ability with the Glicko-2 rating system, and grades free-text explanations with GPT-4o-mini graded against human-tutor agreement.
 
-Final year dissertation project (CS310), BSc Computer Science, University of Warwick, First Class Honours, 2026.
-
-[![Live Demo](https://img.shields.io/badge/demo-live-4c1?style=flat-square)](https://maths-shark.vercel.app)
 ![React](https://img.shields.io/badge/React_18-Vite_7-61DAFB?style=flat-square&logo=react&logoColor=white)
 ![Node](https://img.shields.io/badge/Node.js-Express_5-339933?style=flat-square&logo=node.js&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-PL%2FpgSQL_triggers-4169E1?style=flat-square&logo=postgresql&logoColor=white)
 ![OpenAI](https://img.shields.io/badge/GPT--4o--mini-OpenAI-412991?style=flat-square&logo=openai&logoColor=white)
 ![Tailwind](https://img.shields.io/badge/Tailwind_CSS_4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
 
-**[Live Demo](https://maths-shark.vercel.app)** · [Highlights](#-highlights) · [Features](#-features) · [How It Works](#-how-it-works) · [Tech Stack](#-tech-stack) · [Evaluation](#-evaluation--results) · [Getting Started](#-getting-started)
+[Highlights](#-highlights) · [Features](#-features) · [How It Works](#-how-it-works) · [Tech Stack](#-tech-stack) · [Evaluation](#-evaluation--results) · [Getting Started](#-getting-started)
 
 ![Maths Sloth dashboard](screenshots/dashboard.png)
 
@@ -215,18 +212,9 @@ MathsSloth/
 - **Validated grade prediction**: compare platform ELO against real A-level results to calibrate the ELO-to-grade thresholds against ground truth rather than heuristics.
 - **Opt-in social features**: anonymised percentile ranking and streak/ELO comparison among peers.
 
-## 📖 Further Reading
-
-The full CS310 dissertation report covers the complete literature review, requirements process, database schema, algorithm pseudocode and evaluation in detail. Add it to the repository (for example as `docs/report.pdf`) and link it here.
 
 ## 👤 Author
 
-**Luke Szappanyos** — BSc Computer Science, First Class Honours, University of Warwick. Starting an MSc in Applied AI at WMG in September 2026.
+**Luke Szappanyos** - BSc Computer Science, First Class Honours, University of Warwick. Starting an MSc in Applied AI at WMG in September 2026.
 
 [GitHub](https://github.com/Szzappy) · [LinkedIn](#) · [Portfolio](#)
-
-*Supervised by Dr Claire Rocks, Department of Computer Science, University of Warwick.*
-
-## 📄 Licence
-
-No licence has been added yet. Consider adding an [MIT licence](https://choosealicense.com/licenses/mit/) if you would like others to use or build on this code.
