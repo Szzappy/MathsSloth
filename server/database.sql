@@ -577,7 +577,7 @@ DECLARE
   ];
   v_fsrs_snapped BOOLEAN := FALSE;
 BEGIN
-  -- step 1: load question metadata
+  -- load question metadata
   SELECT elo_rating, glicko_rd, glicko_volatility, is_anchor, anchor_grade_level
   INTO   v_question_elo, v_question_rd, v_question_volatility,
          v_question_is_anchor, v_anchor_grade_level
@@ -589,7 +589,7 @@ BEGIN
   v_question_phi := v_question_rd / c_glicko_scale;
   v_question_g   := 1.0 / SQRT(1 + (3 * v_question_phi * v_question_phi) / (PI() * PI()));
 
-  -- step 2: determine FSRS rating
+  -- determine FSRS rating
   IF NEW.grading_status = 'graded' THEN
     IF NEW.marks_available IS NOT NULL AND NEW.marks_awarded IS NOT NULL THEN
       NEW.fsrs_rating := calculate_fsrs_rating_from_marks(
@@ -616,7 +616,7 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  -- step 4: determine objective performance
+  -- determine objective performance
   v_actual_performance := COALESCE(
     NEW.marks_awarded::DECIMAL / NULLIF(NEW.marks_available, 0),
     CASE
@@ -630,7 +630,7 @@ BEGIN
     NEW.is_correct := (NEW.marks_awarded::DECIMAL / NEW.marks_available) >= 0.75;
   END IF;
 
-  -- step 5: exit if no topic mappings exist
+  -- exit if no topic mappings exist
   IF NOT EXISTS (SELECT 1 FROM question_topics WHERE questionid = NEW.questionid) THEN
     NEW.question_elo_after := v_question_elo;
     NEW.question_rd_after := v_question_rd;
@@ -638,7 +638,7 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  -- step 6: per-topic Glicko-2 + FSRS loop
+  -- per-topic Glicko-2 + FSRS loop
   FOR _topic IN
     SELECT t.topicid
     FROM question_topics qt
@@ -823,13 +823,13 @@ BEGIN
     END;
   END LOOP;
 
-  -- step 7: store average expected success probability
+  -- store average expected success probability
   NEW.expected_success_probability := CASE
     WHEN v_topic_count > 0 THEN v_total_expected_E / v_topic_count
     ELSE NULL
   END;
 
-  -- step 8: update question ELO (skipped for anchors)
+  -- update question ELO (skipped for anchors)
   IF NOT v_question_is_anchor AND v_topic_count > 0 THEN
     DECLARE
       v_current_attempts INTEGER;
