@@ -133,7 +133,7 @@ A pre-development survey of 25 A-level and GCSE Mathematics students (aged 15–
 - **Algorithm design**: Glicko-2 and FSRS-4.5 implemented from first principles rather than an off-the-shelf library, plus a custom multi-factor priority and pooling algorithm.
 - **Database engineering**: an 11-table relational schema with atomic PL/pgSQL triggers, CHECK constraints and cascading referential integrity.
 - **Applied research**: a literature review synthesising 35 academic sources and a 25-person pre-development survey, directly mapped to requirements via MoSCoW prioritisation.
-- **Evaluation methodology**: functional, performance and two-phase user testing (n=24), plus a blind accuracy test of the AI grading pipeline against a human tutor.
+- **Evaluation methodology**: functional, performance and two-phase user testing (n=42), plus a blind accuracy test of the AI grading pipeline against human tutors.
 
 ## 🚀 Getting Started
 
